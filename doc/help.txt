@@ -1,2 +1,8 @@
 Ссылка на репозиторий espruino модулей от проекта "Амперка"
 https://github.com/amperka/espruino-modcat/tree/imu10/modules/%40amperka
+
+Проект ESPRUINO
+http://www.espruino.com/
+
+Проект Амперка:
+http://amperka.ru
