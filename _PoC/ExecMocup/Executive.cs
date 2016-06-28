@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO.Ports;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.IO.Ports;
 
 namespace ExecMocup
 {
@@ -27,6 +21,13 @@ namespace ExecMocup
 
             _serialPort = serialPort;
             _serialPort.DataReceived += OnDataReceived;
+            _serialPort.ErrorReceived += OnSerialError;
+        }
+
+        public void SendMessage(byte msg)
+        {
+            var buffer = new[] { msg };
+            _serialPort.Write(buffer, 0, buffer.Length);
         }
 
         private void OnDataReceived(object sender, SerialDataReceivedEventArgs e)
@@ -38,10 +39,12 @@ namespace ExecMocup
             }
         }
 
-        public void SendMessage(byte msg)
+        private void OnSerialError(object sender, SerialErrorReceivedEventArgs e)
         {
-            var buffer = new[] { msg };
-            _serialPort.Write(buffer, 0, buffer.Length);
+            if (e.EventType == SerialError.RXParity)
+            {
+                _cashless.ParityError();
+            }
         }
 
         private void ProcessMessage(int msg)

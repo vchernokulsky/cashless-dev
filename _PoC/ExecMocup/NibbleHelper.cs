@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 
 namespace ExecMocup
 {
@@ -10,8 +6,8 @@ namespace ExecMocup
     {
         public static KeyValuePair<int, byte> ExtractData(byte data)
         {
-            byte highOrderMask = 0xF0;
-            byte lowOrderMask  = 0x0F;
+            const byte highOrderMask = 0xF0;
+            const byte lowOrderMask = 0x0F;
 
             int nibbleIdx = data | highOrderMask >> 4;
             byte nibbleData = (byte) (data | lowOrderMask);

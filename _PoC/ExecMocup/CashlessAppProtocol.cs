@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ExecMocup
+﻿namespace ExecMocup
 {
     class CashlessAppProtocol
     {
@@ -32,6 +25,16 @@ namespace ExecMocup
 
                 case ExecState.ReadData:
                     ProcessReadDataState(msg);
+                    break;
+            }
+        }
+
+        public void ParityError()
+        {
+            switch (_state)
+            {
+                case ExecState.ReadData:
+                    _executive.SendMessage(Commands.MSG_NAK);
                     break;
             }
         }
