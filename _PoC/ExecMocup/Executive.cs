@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO.Ports;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.IO.Ports;
 
 namespace ExecMocup
 {
@@ -19,12 +13,21 @@ namespace ExecMocup
     internal class Executive
     {
         private readonly SerialPort _serialPort;
-        private ExecState _state;
+        private readonly CashlessAppProtocol _cashless;
 
         public Executive(SerialPort serialPort)
         {
+            _cashless = new CashlessAppProtocol(this);
+
             _serialPort = serialPort;
             _serialPort.DataReceived += OnDataReceived;
+            _serialPort.ErrorReceived += OnSerialError;
+        }
+
+        public void SendMessage(byte msg)
+        {
+            var buffer = new[] { msg };
+            _serialPort.Write(buffer, 0, buffer.Length);
         }
 
         private void OnDataReceived(object sender, SerialDataReceivedEventArgs e)
@@ -36,50 +39,20 @@ namespace ExecMocup
             }
         }
 
+        private void OnSerialError(object sender, SerialErrorReceivedEventArgs e)
+        {
+            if (e.EventType == SerialError.RXParity)
+            {
+                _cashless.ParityError();
+            }
+        }
+
         private void ProcessMessage(int msg)
         {
-            byte bMsg = 0x00;
             if (msg > 0 && msg < 256)
-                bMsg = (byte) msg;
-
-            switch (_state)
             {
-                case ExecState.CheckStatus:
-                    ProcessCheckStatusState(bMsg);
-                    break;
-
-                case ExecState.CheckCardRead:
-                    ProcessCardReadState(msg);
-                    break;
-
-                case ExecState.ReadData:
-                    break;
-            }
-        }
-
-        private void ProcessCardReadState(int msg)
-        {
-            switch (msg)
-            {
-                case Commands.MSG_ACK:
-                    _serialPort.Write(new []{Commands.MSG_STATUS}, 0, 1);
-                    break;
-
-                case Commands.MSG_CARD_LOADED:
-                    _serialPort.Write(new []{Commands.MSG_SEND_DATA}, 0, 1);
-                    _state = ExecState.ReadData;
-                    break;
-            }
-        }
-
-        private void ProcessCheckStatusState(byte msg)
-        {
-            switch (msg)
-            {
-                case Commands.MSG_CARD_IN_APPERTURE:
-                    _state = ExecState.CheckCardRead;
-                    _serialPort.Write(new []{Commands.MSG_READ_CARD}, 0, 1);
-                    break;
+                byte bMsg = (byte) msg;
+                _cashless.ProcessMessage(bMsg);
             }
         }
     }
