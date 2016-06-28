@@ -41,8 +41,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CashlessAppProtocol.cs" />
     <Compile Include="Commands.cs" />
     <Compile Include="Executive.cs" />
+    <Compile Include="NibbleHelper.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
