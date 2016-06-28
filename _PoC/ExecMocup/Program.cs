@@ -7,13 +7,18 @@ namespace ExecMocup
     {
         static void Main(string[] args)
         {
-            string portName = args[1];
-            var serialPort = new SerialPort(portName, 9600, Parity.None, 1);
+            string portName = "COM5";//args[1];
+            var serialPort = new SerialPort(portName, 9600, Parity.None, 8, StopBits.One);
+            serialPort.Open();
             var executive = new Executive(serialPort);
+            executive.Start();
 
             var keyInfo = Console.ReadKey();
-            if(keyInfo.Key == ConsoleKey.Escape)
+            if (keyInfo.Key == ConsoleKey.Escape)
+            {
+                serialPort.Close();
                 Environment.Exit(0);
+            }
         }
     }
 }

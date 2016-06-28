@@ -1,4 +1,6 @@
-﻿using System.IO.Ports;
+﻿using System;
+using System.IO.Ports;
+using System.Threading;
 
 namespace ExecMocup
 {
@@ -12,6 +14,7 @@ namespace ExecMocup
 
     internal class Executive
     {
+        private Timer _timer;
         private readonly SerialPort _serialPort;
         private readonly CashlessAppProtocol _cashless;
 
@@ -22,6 +25,16 @@ namespace ExecMocup
             _serialPort = serialPort;
             _serialPort.DataReceived += OnDataReceived;
             _serialPort.ErrorReceived += OnSerialError;
+        }
+
+        public void Start()
+        {
+            _timer = new Timer(ProcessInternalState, null, 0, 1000);
+        }
+
+        private void ProcessInternalState(object state)
+        {
+            _cashless.ProcessInternalState();
         }
 
         public void SendMessage(byte msg)
@@ -35,6 +48,7 @@ namespace ExecMocup
             if (e.EventType == SerialData.Chars)
             {
                 int msg = _serialPort.ReadByte();
+                Console.WriteLine("<MSG:> " + msg);
                 ProcessMessage(msg);
             }
         }

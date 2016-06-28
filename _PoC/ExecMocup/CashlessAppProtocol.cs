@@ -11,6 +11,22 @@
             _state = ExecState.CheckStatus;
         }
 
+        public void ProcessInternalState()
+        {
+            switch (_state)
+            {
+                case ExecState.CheckStatus:
+                    _executive.SendMessage(Commands.MSG_STATUS);
+                    break;
+
+                case ExecState.CheckCardRead:
+                    break;
+
+                case ExecState.ReadData:
+                    break;
+            }
+        }
+
         public void ProcessMessage(byte msg)
         {
             switch (_state)
