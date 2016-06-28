@@ -4,14 +4,6 @@ using System.Threading;
 
 namespace ExecMocup
 {
-    enum ExecState
-    {
-        CheckStatus,
-        CheckCardRead,
-        ReadData,
-        DecValue,
-    }
-
     internal class Executive
     {
         private Timer _timer;

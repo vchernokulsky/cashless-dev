@@ -1,5 +1,13 @@
 ﻿namespace ExecMocup
 {
+    enum ExecState
+    {
+        CheckStatus,
+        CheckCardRead,
+        ReadData,
+        DecValue,
+    }
+
     class CashlessAppProtocol
     {
         private readonly Executive _executive;
