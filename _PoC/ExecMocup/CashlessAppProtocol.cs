@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -30,7 +31,7 @@ namespace ExecMocup
                     break;
 
                 case ExecState.ReadData:
-                    ProcessReadDataState();
+                    ProcessReadDataState(msg);
                     break;
             }
         }
@@ -61,9 +62,41 @@ namespace ExecMocup
             }
         }
 
-        private void ProcessReadDataState()
+        private ushort _cardData;
+        private byte _dataCRC;
+        private void ProcessReadDataState(byte msg)
         {
-            
+            var pair = NibbleHelper.ExtractData(msg);
+            int idx = pair.Key;
+            byte data = pair.Value;
+
+            if (idx < 5)
+            {
+                AccumulateCardData(idx, data);
+                _executive.SendMessage(Commands.MSG_SEND_DATA);
+            }
+            else
+            {
+                AccumulateCardData(idx, data);
+                _state = ExecState.CheckStatus;
+                _executive.SendMessage(Commands.MSG_STATUS);
+            }
+        }
+
+        private void AccumulateCardData(int idx, byte data)
+        {
+            if (idx < 4)
+            {
+                ushort buffer = 0x0000;
+                buffer = (ushort) ((buffer | data) << (idx*4));
+                _cardData = (ushort) (_cardData & buffer);
+            }
+            else
+            {
+                byte buffer = 0x00;
+                buffer = (byte) ((buffer | data) << ((5 - idx)*4));
+                _dataCRC = (byte) (_dataCRC & buffer);
+            }
         }
     }
 }
