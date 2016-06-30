@@ -9,8 +9,8 @@ namespace ExecMocup
             const byte highOrderMask = 0xF0;
             const byte lowOrderMask = 0x0F;
 
-            int nibbleIdx = data | highOrderMask >> 4;
-            byte nibbleData = (byte) (data | lowOrderMask);
+            int nibbleIdx = data & highOrderMask >> 4;
+            byte nibbleData = (byte) (data & lowOrderMask);
 
             return new KeyValuePair<int, byte>(nibbleIdx, nibbleData);
         }
