@@ -73,7 +73,7 @@ function getState() {
     res.on('data', function(data) {
       nRecv += data.length;
       balance = data;
-      console.log(' 0... balance value',balance);
+      //console.log(' 0... balance value',balance);
     });
     res.on('close',function(data) {
       console.log("Server connection closed, " + nRecv + " bytes received");
@@ -128,7 +128,9 @@ function processCardIn(msg) {
       Serial4.write([0]);
       console.log('CardIn 0x72');
       // получить баланс
-      state = states.CARD_LOADED;
+      if (ready_nibbles()){
+        state = states.CARD_LOADED;
+      }
       console.log(' 3--> State: ' + state);
       break;
   }
@@ -140,9 +142,11 @@ function processCardLoaded(msg) {
     case '71':
       Serial4.write([2]);
       console.log('CardLoaded 0x71');
+      console.log(' ==> Nibbles :: ', nibbles);
       break;
     case '73':
       console.log('CardLoaded 0x73');
+      console.log(' ==> Nibbles :: ', nibbles);
       if (ready_nibbles()){
         console.log(' ==> Nibble to send :: ', nibbles[nibble_index]);
         Serial4.write(nibbles[nibble_index]);
@@ -210,11 +214,14 @@ nfc.on('tag', function(error, data) {
       getState();
       if (balance !== 0){
         formigNibblesToSend();
+        console.log(' ..> Nibbles :: ', nibbles);
       }
     } else {
       console.log('>> Chipid not registered ... ');
     }
-    console.log(' 2--> State: ' + state);
+    if (ready_nibbles()){
+      console.log(' 2--> State: ' + state);
+    }
     // каждые 1000 миллисекунд слушаем новую метку
     setTimeout(function () {
       nfc.listen();
