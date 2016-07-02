@@ -46,10 +46,8 @@ function setupEthernet (){
 }
 
 setupEnv();
-console.log('setup OK');
+console.log('Serial4 setup OK');
 state = states.NULL;
-console.log(' 0--> State: ' + state);
-
 
 function getState() {
   var content = "chip=011000000168435012";
@@ -65,18 +63,17 @@ function getState() {
     }
   };
 
-  console.log('Connectiong to Server ... ');
+  //console.log('Connectiong to Server ... ');
   var http = require("http");
   http.request(options, function(res) {
-    console.log('Connected to Server');
+    //console.log('Connected to Server');
     var nRecv = 0;
     res.on('data', function(data) {
       nRecv += data.length;
       balance = data;
-      //console.log(' 0... balance value',balance);
     });
     res.on('close',function(data) {
-      console.log("Server connection closed, " + nRecv + " bytes received");
+      //console.log("Server connection closed, " + nRecv + " bytes received");
     });
   }).end(content);
 }
@@ -102,15 +99,15 @@ function check_chipid (d, uid) {
 function processMessage(msg) {
   switch(state) {
     case states.NULL:
-      console.log('State NULL');
+      console.log('--> In State NULL \n ');
       Serial4.write([0]);
       break;
     case states.CARD_IN:
-      console.log('State CardIn');
+      console.log('--> In State CardIn \n');
       processCardIn(msg);
       break;
     case states.CARD_LOADED:
-      console.log('State CardLoaded');
+      console.log('--> In State CardLoaded \n');
       processCardLoaded(msg);
       break;
   }
@@ -118,44 +115,52 @@ function processMessage(msg) {
 
 var balance = 0;
 function processCardIn(msg) {
-  console.log('processCardIn');
+  console.log(' --> processCardIn');
   switch(msg) {
     case '71':
       Serial4.write([1]);
-      console.log('CardIn 0x71');
+      console.log('     CardIn 0x71');
       break;
     case '72':
       Serial4.write([0]);
-      console.log('CardIn 0x72');
-      // получить баланс
-      if (ready_nibbles()){
-        state = states.CARD_LOADED;
+      console.log('     CardIn 0x72');
+      if (check_chipid(sample_uid,cur_uid)){
+        console.log('   --> Chipid detected ... ');
+        getState();
+        if (balance !== 0){
+          formigNibblesToSend();
+          state = states.CARD_LOADED;
+        }
+      } else {
+        console.log('   --> Chipid not registered ... ');
+        state = states.NULL;
       }
-      console.log(' 3--> State: ' + state);
+      console.log(' --> State changed to: ' + state);
       break;
   }
 }
 
 function processCardLoaded(msg) {
-  console.log('processCardLoaded');
+  console.log(' --> processCardLoaded');
   switch(msg) {
     case '71':
       Serial4.write([2]);
-      console.log('CardLoaded 0x71');
-      console.log(' ==> Nibbles :: ', nibbles);
+      console.log('      CardLoaded 0x71');
       break;
     case '73':
-      console.log('CardLoaded 0x73');
-      console.log(' ==> Nibbles :: ', nibbles);
+      console.log('      CardLoaded 0x73');
       if (ready_nibbles()){
-        console.log(' ==> Nibble to send :: ', nibbles[nibble_index]);
-        Serial4.write(nibbles[nibble_index]);
-        console.log(' ==> Sended nibble :: ', nibbles[nibble_index]);
-        nibble_index++;
+        if (nibble_index <= 5){
+          Serial4.write(nibbles[nibble_index]);
+          console.log('     => Sended nibble ::', nibbles[nibble_index]);
+          nibble_index++;
+        } else {
+          //
+        }
       }
       break;
     case '7F':
-      console.log('CardLoaded 0x7F');
+      console.log('     CardLoaded 0x7F');
       // отправить предыдущий data nibble (если был ParityError)
       // повторить передачу данных с начала (если был СhecksumError)
       break;
@@ -179,7 +184,7 @@ function ready_nibbles(){
 // обработка команд EXECUTIVE устройства
 Serial4.on('data', function (data) {
   // выводим код запроса от EXEC в консоль
-  console.log("<MSG>: " + data.charCodeAt(0).toString(16));
+  console.log(" \n<MSG>: " + data.charCodeAt(0).toString(16));
   var comand = data.charCodeAt(0).toString(16);
   processMessage(comand);
 });
@@ -191,9 +196,9 @@ I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
 var nfc = require("nfc").connect({i2c: I2C1, irqPin: P9});
 nfc.wakeUp(function(error) {
   if (error) {
-    print('wake up error', error);
+    print('RFID wake up error', error);
   } else {
-    print('wake up OK');
+    print('RFID wake up OK');
     // слушаем новые метки
     nfc.listen();
     }
@@ -209,19 +214,7 @@ nfc.on('tag', function(error, data) {
     console.log(data);    // UID и ATQA
     cur_uid = data.uid;
     state = states.CARD_IN;
-    if (check_chipid(sample_uid,cur_uid)){
-      console.log('>> Chipid detected ... ');
-      getState();
-      if (balance !== 0){
-        formigNibblesToSend();
-        console.log(' ..> Nibbles :: ', nibbles);
-      }
-    } else {
-      console.log('>> Chipid not registered ... ');
-    }
-    if (ready_nibbles()){
-      console.log(' 2--> State: ' + state);
-    }
+    console.log(' --> State changed to: ' + state);
     // каждые 1000 миллисекунд слушаем новую метку
     setTimeout(function () {
       nfc.listen();
@@ -244,7 +237,7 @@ function formigNibblesToSend(){
   }
   makeNibbleStr();
   makeNibbleInt();
-  console.log(' ===> Nibbles ready to send:: ', nibbles);
+  //console.log(' ===> Nibbles ready to send:: ', nibbles);
 }
 
 function alignBinBalanceTo16(){
