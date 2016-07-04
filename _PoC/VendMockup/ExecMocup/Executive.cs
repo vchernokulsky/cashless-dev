@@ -1,18 +1,19 @@
 ﻿using System;
 using System.IO.Ports;
 using System.Threading;
+using ExecMocup.AppLayers;
 
 namespace ExecMocup
 {
-    internal class Executive
+    public class Executive
     {
         private Timer _timer;
         private readonly SerialPort _serialPort;
-        private readonly CashlessAppProtocol _cashless;
+        private readonly CashlessLayer _cashless;
 
         public Executive(SerialPort serialPort)
         {
-            _cashless = new CashlessAppProtocol(this);
+            _cashless = new CashlessLayer(this);
 
             _serialPort = serialPort;
             _serialPort.DataReceived += OnDataReceived;

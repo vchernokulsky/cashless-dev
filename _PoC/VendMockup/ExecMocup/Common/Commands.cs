@@ -1,12 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ExecMocup
+﻿namespace ExecMocup.Common
 {
-    internal class Commands
+    public class Commands
     {
         //EXECUTIVE MESSAGES
         public const byte MSG_STATUS = 0x71;

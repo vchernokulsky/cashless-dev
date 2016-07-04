@@ -1,4 +1,6 @@
-﻿namespace ExecMocup
+﻿using ExecMocup.Common;
+
+namespace ExecMocup.AppLayers
 {
     enum ExecState
     {
@@ -8,12 +10,12 @@
         DecValue,
     }
 
-    class CashlessAppProtocol
+    class CashlessLayer
     {
         private readonly Executive _executive;
         private ExecState _state;
 
-        public CashlessAppProtocol(Executive executive)
+        public CashlessLayer(Executive executive)
         {
             _executive = executive;
             _state = ExecState.CheckStatus;

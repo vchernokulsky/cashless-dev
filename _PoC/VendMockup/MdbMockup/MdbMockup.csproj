@@ -4,16 +4,15 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{A051D53B-4C91-48CB-9778-2396050F4544}</ProjectGuid>
-    <OutputType>Exe</OutputType>
+    <ProjectGuid>{4330594C-17E7-40B3-B4AE-F627C269E34C}</ProjectGuid>
+    <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>ExecMocup</RootNamespace>
-    <AssemblyName>ExecMocup</AssemblyName>
+    <RootNamespace>MdbMockup</RootNamespace>
+    <AssemblyName>MdbMockup</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
@@ -23,13 +22,15 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+    <StartupObject />
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -41,16 +42,16 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CashlessAppProtocol.cs" />
-    <Compile Include="Commands.cs" />
-    <Compile Include="Executive.cs" />
-    <Compile Include="NibbleHelper.cs" />
-    <Compile Include="Program.cs" />
+    <Compile Include="AppLayers\CashlessDevConfig.cs" />
+    <Compile Include="AppLayers\CashlessLayer.cs" />
+    <Compile Include="AppLayers\CashlessStub.cs" />
+    <Compile Include="Common\ByteHelper.cs" />
+    <Compile Include="Common\ProtocolConstants.cs" />
+    <Compile Include="MasterInfo.cs" />
+    <Compile Include="MdbMaster.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="App.config" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

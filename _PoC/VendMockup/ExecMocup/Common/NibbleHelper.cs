@@ -1,8 +1,8 @@
 ﻿using System.Collections.Generic;
 
-namespace ExecMocup
+namespace ExecMocup.Common
 {
-    internal class NibbleHelper
+    public class NibbleHelper
     {
         public static KeyValuePair<int, byte> ExtractData(byte data)
         {
