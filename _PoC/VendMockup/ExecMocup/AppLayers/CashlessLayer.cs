@@ -72,7 +72,9 @@ namespace ExecMocup.AppLayers
                 case Commands.MSG_ACK:
                     _executive.SendMessage(Commands.MSG_STATUS);
                     break;
-
+                case Commands.MSG_CARD_IN_APPERTURE:
+                    _executive.SendMessage(Commands.MSG_STATUS);
+                    break;
                 case Commands.MSG_CARD_LOADED:
                     _executive.SendMessage(Commands.MSG_SEND_DATA);
                     _state = ExecState.ReadData;
@@ -84,9 +86,15 @@ namespace ExecMocup.AppLayers
         {
             switch (msg)
             {
+                case Commands.MSG_ACK:
+                    _executive.SendMessage(Commands.MSG_STATUS);
+                    break;
                 case Commands.MSG_CARD_IN_APPERTURE:
-                    _executive.SendMessage(Commands.MSG_READ_CARD);
-                    _state = ExecState.CheckCardRead;
+                    _executive.SendMessage(Commands.MSG_READ_CARD);                    
+                    break;
+                case Commands.MSG_CARD_LOADED:
+                    _executive.SendMessage(Commands.MSG_SEND_DATA);
+                    _state = ExecState.ReadData;
                     break;
             }
         }
