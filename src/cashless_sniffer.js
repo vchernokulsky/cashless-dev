@@ -49,9 +49,11 @@ function parseSetupCommand() {
   switch(subCmd) {
     case 0x00:  //Config Data command
       if(bufLen > 6) {
-        var isCHK = checkLastByte(buffer, bufLen);
+        var isCHK = mdb.checkLastByte(buffer, bufLen);
         if(isCHK) {
           sendMessage(mdb.COMMON_MSG.ACK);
+          console.log('CMD: ' + buffer.slice(0, bufLen-1));
+          console.log('CHK: ' + buffer[bufLen-1]);
         }
         else {
           console.log('CHK incorrect');
