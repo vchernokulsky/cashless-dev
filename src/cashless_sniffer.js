@@ -13,8 +13,30 @@ function toHexString(data) {
   return str;
 }
 
+//RECV session params
 var cmd = null;
-var isReceived = false;
+var state = mdb.CASHLESS_STATE.INACTIVE;
+function processInternalState(data) {
+  switch(state) {
+    case mdb.CASHLESS_STATE.INACTIVE:
+      break;
+    case mdb.CASHLESS_STATE.DISABLED:
+      break;
+    case mdb.CASHLESS_STATE.ENABLED:
+      break;
+    case mdb.CASHLESS_STATE.IDLE:
+      break;
+    case mdb.CASHLESS_STATE.VEND:
+      break;
+    default:
+      console.log('Incorrect device state!!!');
+      break;
+  }
+}
+
+function inactiveState(data) {
+}
+
 function parseMessage(data) {
   if(bufLen === 0) {
     cmd = data[0] & mdb.MASK.COMMAND;
@@ -34,7 +56,6 @@ function parseMessage(data) {
       break;
   }
 }
-
 
 // variables for recv command fragments
 var bufLen = 0;
@@ -63,15 +84,18 @@ function parseSetupCommand() {
       }
       break;
     case 0x01:  //Max/Min Prices
-      if(bufLen > 5) {
+      if(bufLen > 6) {
         var isCHK = mdb.checkLastByte(buffer);
         if(isCHK) {
           sendMessage(mdb.COMMON_MSG.ACK);
-          bufLen = 0;
         }
+        bufLen = 0;
       }
       break;
   }
+}
+
+function parsePollCommand() {
 }
 
 // transport layer processing

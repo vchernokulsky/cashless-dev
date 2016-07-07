@@ -22,6 +22,16 @@ MDB.prototype.COMMON_MSG = {
     NAK: 0xFF
 };
 
+MDB.prototype.CASHLESS_STATE = {
+    INACTIVE: 0x01,
+    DISABLED: 0x02,
+    ENABLED:  0x03,
+    IDLE:     0x04,
+    VEND:     0x05,
+    REVALUE:  0x06,
+    NEGVEND:  0x07
+};
+
 MDB.prototype.CASHLESS_MSG = {
     RESET:   0x00,
     SETUP:   0x01,
