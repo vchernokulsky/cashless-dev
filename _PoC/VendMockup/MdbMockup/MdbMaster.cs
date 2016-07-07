@@ -39,5 +39,10 @@ namespace MdbMockup
                 Console.WriteLine(e);
             }
         }
+
+        public void WaitResponse()
+        {
+            throw new NotImplementedException();
+        }
     }
 }
