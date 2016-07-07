@@ -22,7 +22,7 @@ MDB.prototype.COMMON_MSG = {
     NAK: 0xFF
 };
 
-MSDB.prototyp.CASHLESS_MSG = {
+MDB.prototype.CASHLESS_MSG = {
     RESET:   0x00,
     SETUP:   0x01,
     POLL:    0x02,
@@ -32,6 +32,24 @@ MSDB.prototyp.CASHLESS_MSG = {
     EXTRA:   0x07
 };
 
+MDB.prototype.checkLastByte = function(buffer, bufLen) {
+    var tmp = [];
+    var chk = 0x00;
+    for(var i = 0; i < bufLen-1; i++) {
+      chk += buffer[i];
+      tmp = tmp.concat([buffer[i]]);
+    }
+    return (chk & 0x000000FF) == buffer[bufLen-1];
+}
+
+MDB.prototype.parseAddrByte = function(data) {
+    var addr = (data & this.MASK.ADDRESS);
+    var cmd  = (data & this.MASK.COMMAND);
+    return {address: addr, command: cmd};
+};
+
+//
+// Export method for create object
 exports.create = function() {
     return new MDB();
 };
