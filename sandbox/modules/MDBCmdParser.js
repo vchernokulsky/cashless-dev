@@ -11,6 +11,9 @@ var SUB_CMD_LENGTH = {
     VEND:  [6, 2, 4, 2, 2, 6]
 };
 
+function MDBCmdParser() {
+};
+
 MDBCmdParser.prototype._appendCmdBytes = function(data) {
   for(var i=0; i<data.length; i++) {
     INTERNAL.buffer[INTERNAL.bufLen+i] = data[i];
@@ -31,32 +34,35 @@ MDBCmdParser.prototype.putData = function(data) {
   var cmd = -1;  //command 
   var sub = -1;  //subcommand
   
-  _appendCmdBytes(data);
+  this._appendCmdBytes(data);
   if(INTERNAL.bufLen > 0) {
-    cmd = buffer[0] & _MDB.MASK.COMMAND
+    cmd = INTERNAL.buffer[0] & _MDB.MASK.COMMAND
   }
   if (INTERNAL.bufLen > 1) {
-    sub = buffer[1];
+    sub = INTERNAL.buffer[1];
   }
   // start command processing
   switch(cmd) {
     case _MDB.CASHLESS_MSG.RESET:
-      console.log('RECV: (RESET)');
-      // NO SUBCOMMAND
-      break;
+        // NO SUBCOMMAND
+        if(INTERNAL.bufLen > 1) {
+          this._buildResult();
+        }
+        break;
     case _MDB.CASHLESS_MSG.SETUP:
         // Command length must equal: LEN(CMD) + LEN(CHK)        
-        if(INTERNAL.bufLen > SUB_CMD_LENGTH.SETUP[subcmdIdx]) {
+        if(INTERNAL.bufLen > SUB_CMD_LENGTH.SETUP[sub]) {
             this._buildResult()
         }
-      break;
+        break;
     case _MDB.CASHLESS_MSG.POLL:
-      console.log('RECV: (POLL)');
-      // NO SUBCOMMAND
+        if(INTERNAL.bufLen > 1) {
+        this._buildResult();
+      }
       break;
     case _MDB.CASHLESS_MSG.VEND:
         // Command length must equal: LEN(CMD) + LEN(CHK)
-        if(INTERNAL.bufLen > SUB_CMD_LENGTH.VEND[subcmdIdx]) {
+        if(INTERNAL.bufLen > SUB_CMD_LENGTH.VEND[sub]) {
             this._buildResult()
         }
         break;
@@ -69,4 +75,10 @@ MDBCmdParser.prototype.getResult = function() {
 
 MDBCmdParser.prototype.clearResult = function() {
     INTERNAL.result = null;
+}
+
+//
+// Export method for create object
+exports.create = function() {
+    return new MDBCmdParser();
 }
