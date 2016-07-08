@@ -1,7 +1,7 @@
 Serial2.setup(9600, {rx:A3, tx:A2, bytesize:9, stopbits:1});
 
-var mdb = require("mdb").create();
-var addr = mdb.ADDRESS.CASHLESS1;
+var _MDB = require("mdb").create();
+var addr = _MDB.ADDRESS.CASHLESS1;
 
 var setup_code = 0;
 
@@ -48,18 +48,18 @@ function toHexString(data) {
 
 //RECV session params
 var cmd = null;
-var state = mdb.CASHLESS_STATE.INACTIVE;
+var state = _MDB.CASHLESS_STATE.INACTIVE;
 function processInternalState(data) {
   switch(state) {
-    case mdb.CASHLESS_STATE.INACTIVE:
+    case _MDB.CASHLESS_STATE.INACTIVE:
       break;
-    case mdb.CASHLESS_STATE.DISABLED:
+    case _MDB.CASHLESS_STATE.DISABLED:
       break;
-    case mdb.CASHLESS_STATE.ENABLED:
+    case _MDB.CASHLESS_STATE.ENABLED:
       break;
-    case mdb.CASHLESS_STATE.IDLE:
+    case _MDB.CASHLESS_STATE.IDLE:
       break;
-    case mdb.CASHLESS_STATE.VEND:
+    case _MDB.CASHLESS_STATE.VEND:
       break;
     default:
       console.log('Incorrect device state!!!');
@@ -67,24 +67,21 @@ function processInternalState(data) {
   }
 }
 
-function inactiveState(data) {
-}
-
 function parseMessage(data) {
   if(bufLen === 0) {
-    cmd = data[0] & mdb.MASK.COMMAND;
+    cmd = data[0] & _MDB.MASK.COMMAND;
   }
   // start command processing
   switch(cmd) {
-    case mdb.CASHLESS_MSG.RESET:
+    case _MDB.CASHLESS_MSG.RESET:
       console.log('RECV: (RESET)');
       break;
-    case mdb.CASHLESS_MSG.SETUP:
+    case _MDB.CASHLESS_MSG.SETUP:
       //console.log(data);
       appendData(data);
       parseSetupCommand(data);
       break;
-    case mdb.CASHLESS_MSG.POLL:
+    case _MDB.CASHLESS_MSG.POLL:
       console.log('RECV: (POLL)');
       break;
   }
@@ -103,9 +100,9 @@ function parseSetupCommand() {
   switch(subCmd) {
     case 0x00:  //Config Data command
       if(bufLen > 6) {
-        var isCHK = mdb.checkLastByte(buffer, bufLen);
+        var isCHK = _MDB.checkLastByte(buffer, bufLen);
         if(isCHK) {
-          sendMessage(mdb.COMMON_MSG.ACK);
+          sendMessage(_MDB.COMMON_MSG.ACK);
           console.log('CMD: ' + buffer.slice(0, bufLen-1));
           console.log('CHK: ' + buffer[bufLen-1]);
           saveSetupInfo(0);
@@ -113,16 +110,16 @@ function parseSetupCommand() {
         }
         else {
           console.log('CHK incorrect');
-          sendMessage(mdb.COMMON_MSG_NAK);
+          sendMessage(_MDB.COMMON_MSG_NAK);
         }
         bufLen = 0;
       }
       break;
     case 0x01:  //Max/Min Prices
       if(bufLen > 6) {
-        var isCHK = mdb.checkLastByte(buffer);
+        var isCHK = _MDB.checkLastByte(buffer);
         if(isCHK) {
-          sendMessage(mdb.COMMON_MSG.ACK);
+          sendMessage(_MDB.COMMON_MSG.ACK);
           saveSetupInfo(1);
         }
         bufLen = 0;
@@ -202,7 +199,7 @@ var addrByte = 0x00;
 Serial2.on('data', function(data) {
   if(bufLen === 0) {
     addrByte   = data.charCodeAt(0);
-    var msgObj = mdb.parseAddrByte(addr);
+    var msgObj = _MDB.parseAddrByte(addr);
     parseMessage(msgObj, data);
   }
   else {
