@@ -1,7 +1,8 @@
 Serial2.setup(9600, {rx:A3, tx:A2, bytesize:9, stopbits:1});
 
 var _MDB = require("mdb").create();
-var addr = _MDB.ADDRESS.CASHLESS1;
+var _parser = require("MDBCmdParser").create();
+//var addr = _MDB.ADDRESS.CASHLESS1;
 
 var setup_code = 0;
 
@@ -46,12 +47,27 @@ function toHexString(data) {
   return str;
 }
 
-//RECV session params
-var cmd = null;
 var state = _MDB.CASHLESS_STATE.INACTIVE;
 function processInternalState(data) {
+  var cmd = data[0] & _MDB.MASK.COMMAND;
   switch(state) {
     case _MDB.CASHLESS_STATE.INACTIVE:
+        switch(cmd) {
+          case _MDB.CASHLESS_MSG.RESET:
+            sendMessage(_MDB.COMMON_MSG.ACK);
+            console.log('(INACTIVE)|RECV:RESET ; SEND: ACK');
+            break;
+          case _MDB.CASHLESS_MSG.POLL:
+            sendMessage([0x00, 0x00]);
+            console.log('(INACTIVE)|RECV:POLL ; SEND: JUST RESET');
+            break;
+          case _MDB.CASHLESS_MSG.SETUP:
+            state = _MDB.CASHLESS_STATE.DISABLED;
+            sendMessage(_MDB.COMMON_MSG.ACK);
+            console.log('(INACTIVE)|RECV:SETUP ; SEND: ACK');
+            console.log('RAW: ' + data);
+            break;            
+        }
       break;
     case _MDB.CASHLESS_STATE.DISABLED:
       break;
@@ -195,25 +211,25 @@ function sendMessage(data) {
   //
 }
 
-var addrByte = 0x00;
 Serial2.on('data', function(data) {
-  if(bufLen === 0) {
-    addrByte   = data.charCodeAt(0);
-    var msgObj = _MDB.parseAddrByte(addr);
-    parseMessage(msgObj, data);
-  }
-  else {
-  }
+    if((data[0] & _MDB.MASK.ADDRESS)==0x10) {
+        _parser.putData(data);
+        var cmd = _parser.getResult();
+        if(cmd != null) {
+            processInternalState(cmd);
+            _parser.clearResult();
+        }
+    }
 });
 
 // Mockups for check parser logic
-function dataRecvMockup(data) {
-  parseMessage(data);
-}
+//function dataRecvMockup(data) {
+//  parseMessage(data);
+//}
 
-setInterval(function() {
-  dataRecvMockup([0x11]);
-  dataRecvMockup([0x00, 0x03]);
-  dataRecvMockup([25, 2, 0x00]);
-  dataRecvMockup([0x2F]);
-}, 2000);
+//setInterval(function() {
+//  dataRecvMockup([0x11]);
+//  dataRecvMockup([0x00, 0x03]);
+//  dataRecvMockup([25, 2, 0x00]);
+//  dataRecvMockup([0x2F]);
+//}, 2000);

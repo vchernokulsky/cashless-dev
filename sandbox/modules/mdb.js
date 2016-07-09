@@ -45,11 +45,19 @@ MDB.prototype.CASHLESS_MSG = {
 MDB.prototype.checkLastByte = function(buffer, bufLen) {
     var tmp = [];
     var chk = 0x00;
-    for(var i = 0; i < bufLen-1; i++) {
+    for(var i=0; i<bufLen-1; i++) {
       chk += buffer[i];
       tmp = tmp.concat([buffer[i]]);
     }
     return (chk & 0x000000FF) == buffer[bufLen-1];
+}
+
+MDB.prototype.calcChkByte(buffer) {
+    var chk = 0x00;
+    for(var i=0; i<buffer.length; i++) {
+        chk +=buffer[i];
+    }
+    return chk & 0x000000FF;
 }
 
 MDB.prototype.parseAddrByte = function(data) {
