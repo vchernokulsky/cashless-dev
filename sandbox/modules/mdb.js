@@ -39,7 +39,7 @@ MDB.prototype.CASHLESS_MSG = {
     VEND:    0x03,
     READER:  0x04,
     REVALUE: 0x05,
-    EXTRA:   0x07
+    EXPANSION:   0x07
 };
 
 MDB.prototype.checkLastByte = function(buffer, bufLen) {
@@ -52,7 +52,7 @@ MDB.prototype.checkLastByte = function(buffer, bufLen) {
     return (chk & 0x000000FF) == buffer[bufLen-1];
 }
 
-MDB.prototype.calcChkByte(buffer) {
+MDB.prototype.calcChkByte = function(buffer) {
     var chk = 0x00;
     for(var i=0; i<buffer.length; i++) {
         chk +=buffer[i];

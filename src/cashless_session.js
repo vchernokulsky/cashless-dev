@@ -10,9 +10,13 @@ var itemPrice = 0;
 
 var lastCmd = null;
 
-var delayCmd = null;
+var delayCmd   = null;
+var delayState = null;
+
 function processInternalState(data) {
   var cmd = data[0] & _MDB.MASK.COMMAND;
+  console.log('MASK: ' + _MDB.MASK.COMMAND);
+  console.log('PROCESS CMD ID: ' + cmd);
   switch(state) {
     case _MDB.CASHLESS_STATE.INACTIVE:
         switch(cmd) {
@@ -25,8 +29,11 @@ function processInternalState(data) {
                 sendMessage(delayCmd);
                 lastCmd = delayCmd;
                 delayCmd = null;
-                state = _MDB.CASHLESS_STATE.DISABLED;                
-                console.log('(INACTIVE)|RECV:POLL ; SEND: Reader Response');                
+                if (delayState !== null) {
+                    state = delayState;
+                    delayState = null;
+                }
+                //console.log('(INACTIVE)|RECV:POLL ; SEND: Reader Response');                
             }
             else {
                 sendMessage([0x00, 0x00]);
@@ -35,11 +42,33 @@ function processInternalState(data) {
             }
             break;
           case _MDB.CASHLESS_MSG.SETUP:
-            // RESPONSE: Reader Response 
-            delayCmd = [0x01, 0x01, 0x2A, 0x11, 0x01, 0x00, 0x0A, 0x00, 0x48];
-            sendMessage(_MDB.COMMON_MSG.ACK);
-            console.log('(INACTIVE)|RECV:SETUP ; SEND: ACK');
-            break;
+            // RESPONSE: Reader Response
+            var sub = data[1];
+            switch (sub){
+                case 0x00: // Config Data
+                    delayCmd = [0x01, 0x01, 0x2A, 0x11, 0x01, 0x00, 0x0A, 0x00, 0x48];
+                    sendMessage(_MDB.COMMON_MSG.ACK);
+                    console.log('(INACTIVE)|RECV:SETUP[Config Data] ; SEND: ACK');
+                break;
+                case 0x01: // Max / Min Price
+                    sendMessage(_MDB.COMMON_MSG.ACK);
+                    console.log('(INACTIVE)|RECV:SETUP[Max/Min Price] ; SEND: ACK');
+                break;
+            }
+          break;
+          case _MDB.CASHLESS_MSG.EXPANSION:
+            var sub = data[1];
+            switch(sub){
+                case 0x00: // request id
+                    // —‘Œ–Ã»–Œ¬¿“‹ response
+                    // PeripheralID;
+                    delayCmd = [0x09, 0x00, 0x01, 0x01, 0x00/*11 bytes*/, 0x00/*11bytes*/, 0x00, 0x01, 0x12 /*!!!*/];
+                    delayState = _MDB.CASHLESS_STATE.DISABLED;
+                    sendMessage(_MDB.COMMON_MSG.ACK);
+                    console.log('(INACTIVE)|RECV:EXPANSION ; SEND: ACK');
+                break;
+            }
+          break;  
         }
       break;
     case _MDB.CASHLESS_STATE.DISABLED:
@@ -75,7 +104,7 @@ function processInternalState(data) {
                 delayCmd = [0x0B, 0x0B];
             }
             break;
-          case _MDB.CASHLESS_MSG.EXTRA:
+          case _MDB.CASHLESS_MSG.EXPANSION:
             if (sub == 0x00) { // EXPANSION ID REQUEST 
                 sendMessage([_MDB.COMMON_MSG.ACK]);
                 delayCmd = [0x01, 0x02, 0xFF, 0x02];
@@ -109,6 +138,7 @@ function processInternalState(data) {
     case _MDB.CASHLESS_STATE.IDLE:
         switch (cmd){
             case _MDB.CASHLESS_MSG.VEND:
+                var sub = data[1];
                 switch(sub) {
                     case 0x00: // Vend Request
                         itemPrice = ((value | cmd[2]) << 8) | cmd[3];  //item price SCALED!!!
@@ -145,6 +175,7 @@ function processInternalState(data) {
                 console.log('(ENABLED)|RECV:POLL ; SEND: Vend Approve');
             break; 
             case _MDB.CASHLESS_MSG.VEND:
+                var sub = data[1];
                 switch(sub) {
                     case 0x02: // VEND SUCCESS
                         sendMessage([_MDB.COMMON_MSG.ACK]);
@@ -201,15 +232,19 @@ var isCmdReading = false;
 function processSerialData(data) {
     //this ubly hack work without validator only
     //TODO: implement MDB address byte reading    
+    console.log('SERIAL INPUT: ' + data);
     if(!isCmdReading) {
         var addr = data[0] & _MDB.MASK.ADDRESS;     
         isCmdReading = (addr == _MDB.ADDRESS.CASHLESS1);
+        
         if (data[0] === _MDB.COMMON_MSG.ACK){
+            console.log('RECV: ACK (from VMC)');
             lastCmd = null;
         }
         if ((data[0] == _MDB.COMMON_MSG.NAK)||
             (data[0] == _MDB.COMMON_MSG.RET)) {
             //TODO: Í‡Í‡ˇ ‡ÁÌËˆ‡ ÏÂÊ‰Û NAK Ë RET?
+            console.log('RECV: NAK or RET (from VMC)');
             sendMessage(lastCmd);
         }
     }
@@ -217,6 +252,7 @@ function processSerialData(data) {
     if(isCmdReading) {
         _parser.putData(data);
         var cmd = _parser.getResult();
+        console.log('PARSER RETURN: ' + cmd);
         if(cmd !== null) {
             console.log('CMD: [' + cmd + ']');
             processInternalState(cmd);
@@ -232,26 +268,27 @@ function processSerialData(data) {
 /////////////////////////////////////
 //External events handlers
 /////////////////////////////////////
-Serial2.on('data', function(data) {
-    console.log('RAW: ', toHexString(data));
-    var msg = toByteArray(data);
-    processSerialData(msg);
-    // var addr = msg[0] & _MDB.MASK.ADDRESS;
-    // if(addr==0x10) {
-        // _parser.putData(msg);
-        // var cmd = _parser.getResult();
-        // if(cmd !== null) {
-            // console.log('CMD: ' + cmd);
-            // processInternalState(cmd);
-            // _parser.clearResult();
-        // }
-    // }
-});
+// Serial2.on('data', function(data) {
+    // console.log('RAW: ', toHexString(data));
+    // var msg = toByteArray(data);
+    // processSerialData(msg);
+    // // var addr = msg[0] & _MDB.MASK.ADDRESS;
+    // // if(addr==0x10) {
+        // // _parser.putData(msg);
+        // // var cmd = _parser.getResult();
+        // // if(cmd !== null) {
+            // // console.log('CMD: ' + cmd);
+            // // processInternalState(cmd);
+            // // _parser.clearResult();
+        // // }
+    // // }
+// });
 
 /////////////////////////////////////
 // Mockups for testing FSM logic
 /////////////////////////////////////
 function recvDataMockup() {
+    // Power-Up Sequence (Cashless Payment Device)
     //CMD: RESET
     processSerialData([0x10, 0x10]);    
     //CMD: POLL
@@ -260,8 +297,36 @@ function recvDataMockup() {
     processSerialData([0x11, 0x00, 0x03, 25, 2, 0x01, 0x30]);
     //CMD: POLL
     processSerialData([0x12, 0x12]);
+    //CMD: MAX/MIN PRICE
+    processSerialData([0x11, 0x01, 0x01, 0x01, 0x00, 0x01, 0x15]);    
+    //CMD: EXPANSION ID REQUEST
+    processSerialData([0x17, 0x00, 0x00, 0x01, 0x01, 0x00/*11 bytes*/, 0x00/*11bytes*/, 0x00, 0x01, 0x20 /*!!!*/]);
+    //CMD: POLL
+    processSerialData([0x12, 0x12]);
+    //CMD: READER ENABLE
+    processSerialData([0x14, 0x01, 0x15]);
     
-    //
+    // Valid Single Vend session
+    //CMD: POLL
+    processSerialData([0x12, 0x12]);
+    //CMD: ACK
+    processSerialData([0x00]);
+    //CMD: VEND REQUEST
+    processSerialData([0x13, 0x00, 0x00, 0x01, 0x00, 0x01, 0x15]);
+    //CMD: POLL
+    processSerialData([0x12, 0x12]);
+    //CMD: ACK
+    processSerialData([0x00]);
+    //CMD: VEND SUCCESS
+    processSerialData([0x13, 0x02, 0x00, 0x01, 0x16]);
+    //CMD: SESSION COMPLETE
+    processSerialData([0x13, 0x04, 0x17]);
+    //CMD: POLL
+    processSerialData([0x12, 0x12]);
+    //CMD: ACK
+    processSerialData([0x00]);
+
+    
     //CMD: POLL (for VALIDATOR)
     processSerialData([0x30, 0x30]);
 }

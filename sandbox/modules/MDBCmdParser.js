@@ -7,8 +7,10 @@ var INTERNAL = {
 }
 
 var SUB_CMD_LENGTH = {
-    SETUP: [6, 6],
-    VEND:  [6, 2, 4, 2, 2, 6]
+    SETUP:     [6, 6],
+    VEND:      [6, 2, 4, 2, 2, 6],
+    EXPANSION: [9], //Исправить на реальную длину команд
+    READER:    [2, 2, 2]
 };
 
 function MDBCmdParser() {
@@ -52,7 +54,7 @@ MDBCmdParser.prototype.putData = function(data) {
     case 0x01://_MDB.CASHLESS_MSG.SETUP:
         // Command length must equal: LEN(CMD) + LEN(CHK)        
         if(INTERNAL.bufLen > SUB_CMD_LENGTH.SETUP[sub]) {
-            this._buildResult()
+            this._buildResult();
         }
         break;
     case 0x02://_MDB.CASHLESS_MSG.POLL:
@@ -63,9 +65,20 @@ MDBCmdParser.prototype.putData = function(data) {
     case 0x03://_MDB.CASHLESS_MSG.VEND:
         // Command length must equal: LEN(CMD) + LEN(CHK)
         if(INTERNAL.bufLen > SUB_CMD_LENGTH.VEND[sub]) {
-            this._buildResult()
+            this._buildResult();
         }
         break;
+    case 0x04://_MDB.CASHLESS_MSG.READER:
+        // Command length must equal: LEN(CMD) + LEN(CHK)
+        if(INTERNAL.bufLen > SUB_CMD_LENGTH.READER[sub]) {
+            this._buildResult();
+        }
+        break;
+    case 0x07://_MDB.CASHLESS_MSG.EXPANSION:
+        if(INTERNAL.bufLen > SUB_CMD_LENGTH.EXPANSION[sub]) {
+            this._buildResult();
+        }
+        break;        
     }
 }
 
