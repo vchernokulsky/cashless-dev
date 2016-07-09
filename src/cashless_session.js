@@ -4,6 +4,7 @@ var _MDB = require("mdb").create();
 var _parser = require("MDBCmdParser").create();
 var state = _MDB.CASHLESS_STATE.INACTIVE;
 
+var balanceReady = true; // FALSE!!! (TRUE for testing...)
 var strBalance = "7754650";
 var curBalance = 0;
 var itemPrice = 0;
@@ -115,23 +116,20 @@ function processInternalState(data) {
     case _MDB.CASHLESS_STATE.ENABLED:
         switch (cmd){
             case _MDB.CASHLESS_MSG.POLL: 
-                var balance = parseInt(strBalance, 10);
-                if (balance > 650){
-                    curBalance = 650;
-                } else {
-                    curBalance = balance;
-                }
-                var value = curBalance * 100;
-                var tmp = [];
-                for(var i=3; i>0; i--) {
-                    tmp[i] = value >> 8*i;
-                }
-                chk = _MDB.calcChkByte([ 0x03, tmp[0], tmp[1]]);
-                // send Begin Session
-                sendMessage([0x03, tmp[0], tmp[1], chk]);
-                lastCmd = [0x03, tmp[0], tmp[1], chk];
-                state = _MDB.CASHLESS_STATE.IDLE; 
-                console.log('(ENABLED)|RECV:POLL ; SEND: ACK');
+				if (!balanceReady){
+					// balance is not ready
+					// Send ACK to VMC
+					sendMessage([_MDB.COMMON_MSG.ACK]);
+					console.log('(ENABLED)|RECV:POLL ; SEND: ACK (balance isn\'t ready)');
+				} else {
+					// balance value is available
+					balanceArr = getBalanceArr();
+					// send Begin Session
+					sendMessage(balanceArr);
+					lastCmd = balanceArr;
+					state = _MDB.CASHLESS_STATE.IDLE; 
+					console.log('(ENABLED)|RECV:POLL ; SEND: Begin Session');
+				}
             break; 
         }
       break;
@@ -141,22 +139,31 @@ function processInternalState(data) {
                 var sub = data[1];
                 switch(sub) {
                     case 0x00: // Vend Request
-                        itemPrice = ((value | cmd[2]) << 8) | cmd[3];  //item price SCALED!!!
+						var value = null;
+                        itemPrice = ((value | data[2]) << 8) | data[3];  //item price SCALED!!!
+						console.log('\n');
                         sendMessage([_MDB.COMMON_MSG.ACK]);
                         state = _MDB.CASHLESS_STATE.VEND; 
-                        console.log('(IDLE)|RECV:VEND ; SEND: ACK');
+                        console.log('(IDLE)|RECV:VEND ; SEND: ACK (Vend Request)');
                     break;
                     case 0x04: // Session Complete
                         sendMessage([_MDB.COMMON_MSG.ACK]);
-                        console.log('(IDLE)|RECV:VEND ; SEND: ACK');
+                        console.log('(IDLE)|RECV:VEND ; SEND: ACK (Session Complete)');
                     break;
                     // другие sub 
                 }
+			break;
             case _MDB.CASHLESS_MSG.POLL:
                 // send End Session
-                sendMessage([0x07, 0x07]);
-                lastCmd = [0x03, tmp[0], tmp[1], chk];
-                state = _MDB.CASHLESS_STATE.ENABLED; 
+				console.log(' --- (IDLE)|RECV:POLL ; TOTAL COMAND IS' + cmd);
+				if (state == _MDB.CASHLESS_STATE.IDLE){
+					sendMessage([0x07, 0x07]);
+					lastCmd = [0x07, 0x07];
+					state = _MDB.CASHLESS_STATE.ENABLED; 
+					console.log('(IDLE)|RECV:POLL ; SEND: 0x07 (End Session)');
+					// end Session => set to zero balance
+					balanceReady = false;
+				}
             break;   
         }
       break;
@@ -166,13 +173,13 @@ function processInternalState(data) {
                 curBalance -= itemPrice;
                 var tmp = [];
                 for(var i=3; i>0; i--) {
-                    tmp[i] = value >> 8*i;
+                    tmp[i] = curBalance >> 8*i;
                 }
                 chk = _MDB.calcChkByte([ 0x03, tmp[0], tmp[1]]);                
                 // send Vend Approved
                 sendMessage([0x03, tmp[0], tmp[1], chk]);
                 lastCmd = [0x03, tmp[0], tmp[1], chk];
-                console.log('(ENABLED)|RECV:POLL ; SEND: Vend Approve');
+                console.log('(ENABLED)|RECV:POLL ; SEND: Vend Approved');
             break; 
             case _MDB.CASHLESS_MSG.VEND:
                 var sub = data[1];
@@ -180,7 +187,7 @@ function processInternalState(data) {
                     case 0x02: // VEND SUCCESS
                         sendMessage([_MDB.COMMON_MSG.ACK]);
                         state = _MDB.CASHLESS_STATE.IDLE;
-                        console.log('(ENABLED)|RECV:POLL ; SEND: ACK');
+                        console.log('(ENABLED)|RECV:POLL ; SEND: ACK (VEND SUCCESS)');
                     break;
                 }
                 // другие sub
@@ -192,6 +199,24 @@ function processInternalState(data) {
       console.log('Incorrect device state!!!');
       break;
   }
+}
+
+function getBalanceArr(){
+	var balance = parseInt(strBalance, 10);
+    if (balance > 650){
+        curBalance = 650;
+    } else {
+        curBalance = balance;
+    }
+    var value = curBalance * 100;
+    var tmp = [];
+    for(var i=2; i>=0; i--) {
+        tmp[i] = value >> 8*i;
+    }
+    chk = _MDB.calcChkByte([ 0x03, tmp[0], tmp[1]]);
+	var result = [0x03, tmp[0], tmp[1], chk];
+	//console.log(' == begin session sequence ' + result);
+	return result;	
 }
 
 function sendMessage(data) {
@@ -306,6 +331,7 @@ function recvDataMockup() {
     //CMD: READER ENABLE
     processSerialData([0x14, 0x01, 0x15]);
     
+	console.log('___________________\n' + 'Starting Vend Session');
     // Valid Single Vend session
     //CMD: POLL
     processSerialData([0x12, 0x12]);
