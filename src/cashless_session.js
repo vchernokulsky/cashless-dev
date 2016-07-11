@@ -1,7 +1,11 @@
+// setup RFID module
+I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
 Serial2.setup(9600, {rx:A3, tx:A2, bytesize:9, stopbits:1});
 
+var rfidReader = require("nfc").connect({i2c: I2C1, irqPin: P9});
 var _MDB = require("mdb").create();
 var _parser = require("MDBCmdParser").create();
+
 var state = _MDB.CASHLESS_STATE.INACTIVE;
 
 var balanceReady = true; // FALSE!!! (TRUE for testing...)
@@ -156,6 +160,7 @@ function processInternalState(data) {
             case _MDB.CASHLESS_MSG.POLL:
                 // send End Session
 				console.log(' --- (IDLE)|RECV:POLL ; TOTAL COMAND IS' + cmd);
+                // TODO: FIX this check?
 				if (state == _MDB.CASHLESS_STATE.IDLE){
 					sendMessage([0x07, 0x07]);
 					lastCmd = [0x07, 0x07];
@@ -236,6 +241,37 @@ function sendMessage(data) {
     // }
 }
 
+function getUserBalance() {
+  var content = "chip=011000000168435012"; // <-- UID
+  var options = {
+	host: 'sync.sportlifeclub.ru',
+	port: '60080',
+    path: '/slsrv/Chip/GetState',
+    protocol: "http:",
+    method: "POST",
+    headers: {
+      "Content-Type":"application/x-www-form-urlencoded",
+      "Content-Length":content.length
+    }
+  };
+
+  //console.log('Connectiong to Server ... ');
+  var sBalance = '';  
+  var http = require("http");
+  http.request(options, function(res) {
+    //console.log('Connected to Server');
+    var nRecv = 0;
+    res.on('data', function(data) {
+      //nRecv += data.length;
+      sBalance = data;
+      return sBalance;
+    });
+    res.on('close',function(data) {
+      //console.log("Server connection closed, " + nRecv + " bytes received");
+    });    
+  }).end(content);
+}
+
 function toHexString(data) {
     var str = '[';
     for(var i=0; i<data.length; i++) {
@@ -309,9 +345,23 @@ function processSerialData(data) {
     // // }
 // });
 
+rfidReader.on('tag', function(error, data) {
+  if (error) {
+    print('tag read error');
+  } else {
+    cur_uid = data.uid;
+    strBalance = getUserBalance();
+    setTimeout(function () {
+      rfidReader.listen();
+    }, 1000);
+  }
+});
+
+
 /////////////////////////////////////
 // Mockups for testing FSM logic
 /////////////////////////////////////
+var testPacketCnt = 20;
 function recvDataMockup() {
     // Power-Up Sequence (Cashless Payment Device)
     //CMD: RESET
@@ -324,33 +374,41 @@ function recvDataMockup() {
     processSerialData([0x12, 0x12]);
     //CMD: MAX/MIN PRICE
     processSerialData([0x11, 0x01, 0x01, 0x01, 0x00, 0x01, 0x15]);    
-    //CMD: EXPANSION ID REQUEST
+    //CMD: EXPANSION ID REQUEST    
+    // '\0x17\0x00' + '\0x00\0x00\0x01' + 'VNDX-CD-001' + '00000000001' + '\0x00\0x00\0x01'
     processSerialData([0x17, 0x00, 0x00, 0x01, 0x01, 0x00/*11 bytes*/, 0x00/*11bytes*/, 0x00, 0x01, 0x20 /*!!!*/]);
     //CMD: POLL
     processSerialData([0x12, 0x12]);
     //CMD: READER ENABLE
     processSerialData([0x14, 0x01, 0x15]);
+
+    setInterval(function(){
+        if(testPacketCnt > 0) {
+            processSerialData([0x12, 0x12]);
+            testPacketCnt--;
+        }
+    }, 500);
     
-	console.log('___________________\n' + 'Starting Vend Session');
-    // Valid Single Vend session
-    //CMD: POLL
-    processSerialData([0x12, 0x12]);
-    //CMD: ACK
-    processSerialData([0x00]);
-    //CMD: VEND REQUEST
-    processSerialData([0x13, 0x00, 0x00, 0x01, 0x00, 0x01, 0x15]);
-    //CMD: POLL
-    processSerialData([0x12, 0x12]);
-    //CMD: ACK
-    processSerialData([0x00]);
-    //CMD: VEND SUCCESS
-    processSerialData([0x13, 0x02, 0x00, 0x01, 0x16]);
-    //CMD: SESSION COMPLETE
-    processSerialData([0x13, 0x04, 0x17]);
-    //CMD: POLL
-    processSerialData([0x12, 0x12]);
-    //CMD: ACK
-    processSerialData([0x00]);
+	// console.log('___________________\n' + 'Starting Vend Session');
+    // // Valid Single Vend session
+    // //CMD: POLL
+    // processSerialData([0x12, 0x12]);
+    // //CMD: ACK
+    // processSerialData([0x00]);
+    // //CMD: VEND REQUEST
+    // processSerialData([0x13, 0x00, 0x00, 0x01, 0x00, 0x01, 0x15]);
+    // //CMD: POLL
+    // processSerialData([0x12, 0x12]);
+    // //CMD: ACK
+    // processSerialData([0x00]);
+    // //CMD: VEND SUCCESS
+    // processSerialData([0x13, 0x02, 0x00, 0x01, 0x16]);
+    // //CMD: SESSION COMPLETE
+    // processSerialData([0x13, 0x04, 0x17]);
+    // //CMD: POLL
+    // processSerialData([0x12, 0x12]);
+    // //CMD: ACK
+    // processSerialData([0x00]);
 
     
     //CMD: POLL (for VALIDATOR)
