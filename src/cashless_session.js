@@ -1,12 +1,12 @@
-// setup RFID module
-I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
 Serial2.setup(9600, {rx:A3, tx:A2, bytesize:9, stopbits:1});
 
-var rfidReader = require("nfc").connect({i2c: I2C1, irqPin: P9});
 var _MDB = require("mdb").create();
 var _parser = require("MDBCmdParser").create();
 
 var state = _MDB.CASHLESS_STATE.INACTIVE;
+
+var isSessionCanceled = false;
+var isCoinMechPushes = false;
 
 var balanceReady = true; // FALSE!!! (TRUE for testing...)
 var strBalance = "7754650";
@@ -17,6 +17,29 @@ var lastCmd = null;
 
 var delayCmd   = null;
 var delayState = null;
+
+I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
+var rfidReader = require("nfc").connect({i2c: I2C1, irqPin: P9});
+rfidReader.wakeUp(function(error) {
+  if (error) {
+    print('wake up error', error);
+  } else {
+    print('wake up OK');
+    rfidReader.listen();
+    }
+});
+rfidReader.on('tag', function(error, data) {
+  if (error) {
+    print('tag read error');
+  } else {
+    cur_uid = data.uid;
+	console.log('--> In rfidReader.on()');
+    strBalance = getUserBalance();
+    setTimeout(function () {
+      rfidReader.listen();
+    }, 1000);
+  }
+});
 
 function processInternalState(data) {
   var cmd = data[0] & _MDB.MASK.COMMAND;
@@ -150,18 +173,28 @@ function processInternalState(data) {
                         state = _MDB.CASHLESS_STATE.VEND; 
                         console.log('(IDLE)|RECV:VEND ; SEND: ACK (Vend Request)');
                     break;
+					case 0x01: // Cancel Vend
+						sendMessage([_MDB.COMMON_MSG.ACK]);
+						console.log('(IDLE)|RECV:VEND ; SEND: ACK (Vend Denied)');
+					break;
                     case 0x04: // Session Complete
                         sendMessage([_MDB.COMMON_MSG.ACK]);
                         console.log('(IDLE)|RECV:VEND ; SEND: ACK (Session Complete)');
                     break;
+					
                     // другие sub 
                 }
 			break;
             case _MDB.CASHLESS_MSG.POLL:
-                // send End Session
-				console.log(' --- (IDLE)|RECV:POLL ; TOTAL COMAND IS' + cmd);
-                // TODO: FIX this check?
-				if (state == _MDB.CASHLESS_STATE.IDLE){
+				if (isSessionCanceled){
+					// send Session Cancel
+					sendMessage([0x04, 0x04]);
+					lastCmd = [0x04, 0x04];
+					console.log('(IDLE)|RECV:SESSION_CANCEL ; SEND: 0x04 (Session Cancel)');
+					// Session Cancel => set to zero balance
+					balanceReady = false;					
+				} else {
+					// send End Session
 					sendMessage([0x07, 0x07]);
 					lastCmd = [0x07, 0x07];
 					state = _MDB.CASHLESS_STATE.ENABLED; 
@@ -169,30 +202,44 @@ function processInternalState(data) {
 					// end Session => set to zero balance
 					balanceReady = false;
 				}
-            break;   
+            break;   			
         }
       break;
     case _MDB.CASHLESS_STATE.VEND:
         switch (cmd){
-            case _MDB.CASHLESS_MSG.POLL:    
-                curBalance -= itemPrice;
-                var tmp = [];
-                for(var i=3; i>0; i--) {
-                    tmp[i] = curBalance >> 8*i;
-                }
-                chk = _MDB.calcChkByte([ 0x03, tmp[0], tmp[1]]);                
-                // send Vend Approved
-                sendMessage([0x03, tmp[0], tmp[1], chk]);
-                lastCmd = [0x03, tmp[0], tmp[1], chk];
-                console.log('(ENABLED)|RECV:POLL ; SEND: Vend Approved');
+            case _MDB.CASHLESS_MSG.POLL: 
+				if (isCoinMechPushes) {
+					// User pushes coin mech. escrow return
+					// Send VEND DENIED
+					sendMessage([0x06, 0x06]);
+					lastCmd = 0x06, 0x06;
+					state = _MDB.CASHLESS_STATE.IDLE;
+					console.log('(VEND)|RECV:POLL ; SEND: Vend Denied');
+				} else {			
+					curBalance -= itemPrice;
+					var tmp = [];
+					for(var i=3; i>0; i--) {
+						tmp[i] = curBalance >> 8*i;
+					}
+					chk = _MDB.calcChkByte([ 0x03, tmp[0], tmp[1]]);                
+					// send Vend Approved
+					sendMessage([0x03, tmp[0], tmp[1], chk]);
+					lastCmd = [0x03, tmp[0], tmp[1], chk];
+					console.log('(VEND)|RECV:POLL ; SEND: Vend Approved');
+				}
             break; 
             case _MDB.CASHLESS_MSG.VEND:
                 var sub = data[1];
                 switch(sub) {
+					case 0x01: // CANCEL VEND
+						sendMessage([_MDB.COMMON_MSG.ACK]);
+						console.log('(VEND)|RECV:VEND ; SEND: ACK (CANCEL VEND)');
+					
+					break;
                     case 0x02: // VEND SUCCESS
                         sendMessage([_MDB.COMMON_MSG.ACK]);
                         state = _MDB.CASHLESS_STATE.IDLE;
-                        console.log('(ENABLED)|RECV:POLL ; SEND: ACK (VEND SUCCESS)');
+                        console.log('(VEND)|RECV:VEND ; SEND: ACK (VEND SUCCESS)');
                     break;
                 }
                 // другие sub
@@ -255,19 +302,17 @@ function getUserBalance() {
     }
   };
 
-  //console.log('Connectiong to Server ... ');
+  console.log('Connectiong to Server ... ');
   var sBalance = '';  
   var http = require("http");
   http.request(options, function(res) {
-    //console.log('Connected to Server');
-    var nRecv = 0;
+    console.log('Connected to Server');
     res.on('data', function(data) {
-      //nRecv += data.length;
       sBalance = data;
       return sBalance;
     });
     res.on('close',function(data) {
-      //console.log("Server connection closed, " + nRecv + " bytes received");
+      console.log("Server connection closed");
     });    
   }).end(content);
 }
@@ -297,7 +342,6 @@ function processSerialData(data) {
     if(!isCmdReading) {
         var addr = data[0] & _MDB.MASK.ADDRESS;     
         isCmdReading = (addr == _MDB.ADDRESS.CASHLESS1);
-        
         if (data[0] === _MDB.COMMON_MSG.ACK){
             console.log('RECV: ACK (from VMC)');
             lastCmd = null;
@@ -345,18 +389,6 @@ function processSerialData(data) {
     // // }
 // });
 
-rfidReader.on('tag', function(error, data) {
-  if (error) {
-    print('tag read error');
-  } else {
-    cur_uid = data.uid;
-    strBalance = getUserBalance();
-    setTimeout(function () {
-      rfidReader.listen();
-    }, 1000);
-  }
-});
-
 
 /////////////////////////////////////
 // Mockups for testing FSM logic
@@ -381,15 +413,15 @@ function recvDataMockup() {
     processSerialData([0x12, 0x12]);
     //CMD: READER ENABLE
     processSerialData([0x14, 0x01, 0x15]);
-
+	/*
     setInterval(function(){
         if(testPacketCnt > 0) {
             processSerialData([0x12, 0x12]);
             testPacketCnt--;
         }
     }, 500);
-    
-	// console.log('___________________\n' + 'Starting Vend Session');
+    */
+	// console.log('Starting Vend Session');
     // // Valid Single Vend session
     // //CMD: POLL
     // processSerialData([0x12, 0x12]);
@@ -410,7 +442,75 @@ function recvDataMockup() {
     // //CMD: ACK
     // processSerialData([0x00]);
 
-    
+	// EXAMPLE VEND SESSION #3 
+	// Session cancelled by user with reader return button
+	/*
+	console.log('_________________________\n' + ' Starting Vend Session #3'); 
+	//CMD: POLL 
+    processSerialData([0x12, 0x12]);
+	// SESSION CANCELING ... (button RETURN pressed) 
+	isSessionCanceled = true;
+	//CMD: POLL for SESSION_CANCEL
+	processSerialData([0x12, 0x12]);
+	//						(button RETURN released) 	
+	isSessionCanceled = false;
+	//CMD: ACK
+	processSerialData([0x00]);
+	//CMD: SESSION COMPLETE
+	processSerialData([0x13, 0x04, 0x17]);
+	//CMD: POLL 
+    processSerialData([0x12, 0x12]);
+	//CMD: ACK
+	processSerialData([0x00]);
+	*/
+	
+	// EXAMPLE VEND SESSION #4a
+	// Session cancelled by user via coin mechanism
+	// 		escrow return button before product was selected)
+	/*
+	console.log('_________________________\n' + ' Starting Vend Session #4a'); 
+	//CMD: POLL 
+    processSerialData([0x12, 0x12]);
+	//CMD: ACK
+	processSerialData([0x00]);
+	//CMD: SESSION COMPLETE
+	processSerialData([0x13, 0x04, 0x17]);
+	//CMD: POLL 
+    processSerialData([0x12, 0x12]);
+	//CMD: ACK
+	processSerialData([0x00]);
+	*/
+	
+	
+	// EXAMPLE VEND SESSION #4b
+	//Session cancelled by user via coin mechanism
+	//		escrow return button after product was selected
+	
+	console.log('_________________________\n' + ' Starting Vend Session #4b'); 
+	//CMD: POLL 
+    processSerialData([0x12, 0x12]);
+	//CMD: ACK
+	processSerialData([0x00]);
+	//CMD: VEND REQUEST
+    processSerialData([0x13, 0x00, 0x00, 0x01, 0x00, 0x01, 0x15]);
+	
+	isCoinMechPushes = true;
+	//CMD: CANCEL VEND
+	processSerialData([0x13, 0x01, 0x14]);	
+	//CMD: POLL 
+    processSerialData([0x12, 0x12]);
+	isCoinMechPushes = false;
+	
+	//CMD: SESSION COMPLETE
+	processSerialData([0x13, 0x04, 0x17]);
+	//CMD: POLL 
+    processSerialData([0x12, 0x12]);
+	//CMD: ACK
+	processSerialData([0x00]);
+	// 
+	
+	
+	
     //CMD: POLL (for VALIDATOR)
     processSerialData([0x30, 0x30]);
 }
