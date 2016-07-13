@@ -62,9 +62,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="logger.h" />
     <ClInclude Include="MDBConst.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="logger.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
