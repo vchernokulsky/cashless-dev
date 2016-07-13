@@ -9,7 +9,7 @@ var INTERNAL = {
 var SUB_CMD_LENGTH = {
     SETUP:     [6, 6],
     VEND:      [6, 2, 4, 2, 2, 6],
-    EXPANSION: [9], //Исправить на реальную длину команд
+    EXPANSION: [31],
     READER:    [2, 2, 2]
 };
 

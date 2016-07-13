@@ -16,3 +16,6 @@ doc/mdb.pdf
 doc/pn532ds.pdf
 doc/w5500_datasheet.pdf
 _PoC/MDBCommLayer/Debug/
+_PoC/MDBCommLayer/MDBCommLayer.opensdf
+_PoC/MDBCommLayer/MDBCommLayer.sdf
+src/1.js
