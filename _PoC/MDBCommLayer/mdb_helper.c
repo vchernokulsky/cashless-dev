@@ -1,7 +1,9 @@
 #include "MDBConst.h"
 #include "mdb_helper.h"
+#include "logger.h"
 #ifdef __PC_STUB__
 	#include <stdio.h>
+	#include <string.h>
 	#include <memory.h>
 #endif
 
@@ -15,6 +17,7 @@ unsigned short SUB_READER[3] =    {2, 2, 2};
 int  cmdId;
 int  subCmdId;
 int  buffer_length;
+
 
 unsigned char calculate_checksum(const char* data, unsigned int length) {
 	unsigned int i = 0;
@@ -85,13 +88,7 @@ unsigned short check_for_mdb_command(char input) {
 
 void send_mdb_command(struct Response *data) {
 #ifdef __PC_STUB__
-	unsigned int i = 0;
-	for(i=0; i<data->length; i++) {
-		unsigned int val = (unsigned int)data->buffer[i];
-		printf("0x%02x", val);
-		printf(" ");
-	}
-	printf("\n");
+	log_array("", data->buffer, data->length);
 #endif
 }
 

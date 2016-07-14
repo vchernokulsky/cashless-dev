@@ -84,7 +84,6 @@ void test_scan_mdb_message() {
 void main() {
 	test_power_up_sequence();
 
-
 	//test_create_message();
 	system("pause");
 }
