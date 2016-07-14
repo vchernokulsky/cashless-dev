@@ -40,7 +40,11 @@ void test_power_up_sequence() {
 	//unsigned char chk = calculate_checksum(resp_request_id, 30);
 }
 
-void test_create_message() {
+void test_single_vend_sequence() {
+	//TODO: test single vend session
+}
+
+void test_scan_mdb_message() {
 	int i = 0;
 	unsigned short msg_len = 0;
 	char buffer[MAX_MSG_LENGTH];
@@ -78,7 +82,9 @@ void test_create_message() {
 }
 
 void main() {
-	//test_power_up_sequence();
-	test_create_message();
+	test_power_up_sequence();
+
+
+	//test_create_message();
 	system("pause");
 }
