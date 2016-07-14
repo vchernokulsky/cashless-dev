@@ -6,7 +6,8 @@ var _parser = require("MDBCmdParser").create();
 var state = _MDB.CASHLESS_STATE.INACTIVE;
 
 var isSessionCanceled = false;
-var isCoinMechPushes = false;
+var isRefundCompleted = false;
+var vendPollFlag = -1;
 
 var balanceReady = true; // FALSE!!! (TRUE for testing...)
 var strBalance = "7754650";
@@ -90,7 +91,7 @@ function processInternalState(data) {
                 case 0x00: // request id
                     // ÑÔÎÐÌÈÐÎÂÀÒÜ response
                     // PeripheralID;
-                    delayCmd = [0x09, 0x00, 0x01, 0x01, 0x00/*11 bytes*/, 0x00/*11bytes*/, 0x00, 0x01, 0x12 /*!!!*/];
+                    delayCmd = [0x09,0x01,0x01,0x01,0x00,0x12];
                     delayState = _MDB.CASHLESS_STATE.DISABLED;
                     sendMessage(_MDB.COMMON_MSG.ACK);
                     console.log('(INACTIVE)|RECV:EXPANSION ; SEND: ACK');
@@ -155,7 +156,7 @@ function processInternalState(data) {
 					sendMessage(balanceArr);
 					lastCmd = balanceArr;
 					state = _MDB.CASHLESS_STATE.IDLE; 
-					console.log('(ENABLED)|RECV:POLL ; SEND: Begin Session');
+					console.log('(ENABLED)|RECV:POLL ; SEND: BEGIN SESSION');
 				}
             break; 
         }
@@ -171,15 +172,15 @@ function processInternalState(data) {
 						console.log('\n');
                         sendMessage([_MDB.COMMON_MSG.ACK]);
                         state = _MDB.CASHLESS_STATE.VEND; 
-                        console.log('(IDLE)|RECV:VEND ; SEND: ACK (Vend Request)');
+                        console.log('(IDLE)|RECV:VEND ; SEND: ACK (VEND REQUEST)');
                     break;
 					case 0x01: // Cancel Vend
 						sendMessage([_MDB.COMMON_MSG.ACK]);
-						console.log('(IDLE)|RECV:VEND ; SEND: ACK (Vend Denied)');
+						console.log('(IDLE)|RECV:VEND ; SEND: ACK (VEND DENIED)');
 					break;
                     case 0x04: // Session Complete
                         sendMessage([_MDB.COMMON_MSG.ACK]);
-                        console.log('(IDLE)|RECV:VEND ; SEND: ACK (Session Complete)');
+                        console.log('(IDLE)|RECV:VEND ; SEND: ACK (SESSION COMPLETE)');
                     break;
 					
                     // äðóãèå sub 
@@ -190,7 +191,7 @@ function processInternalState(data) {
 					// send Session Cancel
 					sendMessage([0x04, 0x04]);
 					lastCmd = [0x04, 0x04];
-					console.log('(IDLE)|RECV:SESSION_CANCEL ; SEND: 0x04 (Session Cancel)');
+					console.log('(IDLE)|RECV:SESSION_CANCEL ; SEND: 0x04 (SESSION CANCEL)');
 					// Session Cancel => set to zero balance
 					balanceReady = false;					
 				} else {
@@ -198,7 +199,7 @@ function processInternalState(data) {
 					sendMessage([0x07, 0x07]);
 					lastCmd = [0x07, 0x07];
 					state = _MDB.CASHLESS_STATE.ENABLED; 
-					console.log('(IDLE)|RECV:POLL ; SEND: 0x07 (End Session)');
+					console.log('(IDLE)|RECV:POLL ; SEND: 0x07 (END SESSION)');
 					// end Session => set to zero balance
 					balanceReady = false;
 				}
@@ -208,14 +209,40 @@ function processInternalState(data) {
     case _MDB.CASHLESS_STATE.VEND:
         switch (cmd){
             case _MDB.CASHLESS_MSG.POLL: 
-				if (isCoinMechPushes) {
+			switch (vendPollFlag){
+				case 1:
+					// Coin Mechanism Pushes
 					// User pushes coin mech. escrow return
 					// Send VEND DENIED
 					sendMessage([0x06, 0x06]);
-					lastCmd = 0x06, 0x06;
+					lastCmd = [0x06, 0x06];
 					state = _MDB.CASHLESS_STATE.IDLE;
-					console.log('(VEND)|RECV:POLL ; SEND: Vend Denied');
-				} else {			
+					console.log('(VEND)|RECV:POLL ; SEND: VEND DENIED');
+				break;
+				case 2:
+					// cmd = Session Failure
+					if (!isRefundCompleted){
+						// refund is not completed
+						// silence...	
+						console.log('(VEND)|RECV:POLL  ... silence ...');
+					} else {
+						// refund is completed
+						// balance reinstated
+						sendMessage([_MDB.COMMON_MSG.ACK]);
+						console.log('(VEND)|RECV:POLL ; SEND: ACK (REFUND DONE)');
+					}
+				break;
+				case 3:
+					// cmd = Session Complete
+					sendMessage([0x07, 0x07]);
+					lastCmd = [0x07, 0x07];
+					state = _MDB.CASHLESS_STATE.ENABLED; 
+					console.log('(VEND)|RECV:POLL ; SEND: 0x07 (END SESSION)');
+					isSessionComplete = true;
+				break;
+				default:
+					// No CoinMechanismPushes No SessionFailure
+					// VEND APPROVED
 					curBalance -= itemPrice;
 					var tmp = [];
 					for(var i=3; i>0; i--) {
@@ -225,8 +252,9 @@ function processInternalState(data) {
 					// send Vend Approved
 					sendMessage([0x03, tmp[0], tmp[1], chk]);
 					lastCmd = [0x03, tmp[0], tmp[1], chk];
-					console.log('(VEND)|RECV:POLL ; SEND: Vend Approved');
-				}
+					console.log('(VEND)|RECV:POLL ; SEND: VEND APPROVED');
+				break;
+			}
             break; 
             case _MDB.CASHLESS_MSG.VEND:
                 var sub = data[1];
@@ -241,6 +269,21 @@ function processInternalState(data) {
                         state = _MDB.CASHLESS_STATE.IDLE;
                         console.log('(VEND)|RECV:VEND ; SEND: ACK (VEND SUCCESS)');
                     break;
+					case 0x03: // VEND FAILURE
+					// flag: price is not returned
+						sendMessage([_MDB.COMMON_MSG.ACK]);
+						console.log('(VEND)|RECV:VEND ; SEND: ACK (VEND FAILURE)');
+						//
+						isRefundCompleted = false;
+						// refunding ...
+						curBalance += itemPrice;
+						isRefundCompleted = true;
+					break;
+					case 0x04: // SESSION COMPLETE
+						sendMessage([_MDB.COMMON_MSG.ACK]);
+						console.log('(VEND)|RECV:VEND ; SEND: ACK (SESSION COMPLETE)');
+						isSessionComplete = true;
+					break;
                 }
                 // äðóãèå sub
             break;
@@ -408,7 +451,8 @@ function recvDataMockup() {
     processSerialData([0x11, 0x01, 0x01, 0x01, 0x00, 0x01, 0x15]);    
     //CMD: EXPANSION ID REQUEST    
     // '\0x17\0x00' + '\0x00\0x00\0x01' + 'VNDX-CD-001' + '00000000001' + '\0x00\0x00\0x01'
-    processSerialData([0x17, 0x00, 0x00, 0x01, 0x01, 0x00/*11 bytes*/, 0x00/*11bytes*/, 0x00, 0x01, 0x20 /*!!!*/]);
+    //processSerialData([0x17,0x00,0x00,0x01,0x01, 0x00,0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,0x01, 0x20]);
+	processSerialData([0x17,0x00,0x00,0x00,0x01,0x08]);
     //CMD: POLL
     processSerialData([0x12, 0x12]);
     //CMD: READER ENABLE
@@ -421,27 +465,31 @@ function recvDataMockup() {
         }
     }, 500);
     */
-	// console.log('Starting Vend Session');
-    // // Valid Single Vend session
-    // //CMD: POLL
-    // processSerialData([0x12, 0x12]);
-    // //CMD: ACK
-    // processSerialData([0x00]);
-    // //CMD: VEND REQUEST
-    // processSerialData([0x13, 0x00, 0x00, 0x01, 0x00, 0x01, 0x15]);
-    // //CMD: POLL
-    // processSerialData([0x12, 0x12]);
-    // //CMD: ACK
-    // processSerialData([0x00]);
-    // //CMD: VEND SUCCESS
-    // processSerialData([0x13, 0x02, 0x00, 0x01, 0x16]);
-    // //CMD: SESSION COMPLETE
-    // processSerialData([0x13, 0x04, 0x17]);
-    // //CMD: POLL
-    // processSerialData([0x12, 0x12]);
-    // //CMD: ACK
-    // processSerialData([0x00]);
-
+	
+	// EXAMPLE VEND SESSION #1
+	// Valid Single Vend 
+	/*
+	console.log('Starting Vend Session');
+    // Valid Single Vend session
+    //CMD: POLL
+    processSerialData([0x12, 0x12]);
+    //CMD: ACK
+    processSerialData([0x00]);
+    //CMD: VEND REQUEST
+	processSerialData([0x13, 0x00, 0x00, 0x01, 0x00, 0x01, 0x15]);
+    //CMD: POLL
+    processSerialData([0x12, 0x12]);
+    //CMD: ACK
+    processSerialData([0x00]);
+    //CMD: VEND SUCCESS
+    processSerialData([0x13, 0x02, 0x00, 0x01, 0x16]);
+    //CMD: SESSION COMPLETE
+    processSerialData([0x13, 0x04, 0x17]);
+    //CMD: POLL
+    processSerialData([0x12, 0x12]);
+    //CMD: ACK
+    processSerialData([0x00]);
+	*/
 	// EXAMPLE VEND SESSION #3 
 	// Session cancelled by user with reader return button
 	/*
@@ -463,7 +511,6 @@ function recvDataMockup() {
 	//CMD: ACK
 	processSerialData([0x00]);
 	*/
-	
 	// EXAMPLE VEND SESSION #4a
 	// Session cancelled by user via coin mechanism
 	// 		escrow return button before product was selected)
@@ -480,12 +527,10 @@ function recvDataMockup() {
 	//CMD: ACK
 	processSerialData([0x00]);
 	*/
-	
-	
 	// EXAMPLE VEND SESSION #4b
 	//Session cancelled by user via coin mechanism
 	//		escrow return button after product was selected
-	
+	/*
 	console.log('_________________________\n' + ' Starting Vend Session #4b'); 
 	//CMD: POLL 
     processSerialData([0x12, 0x12]);
@@ -494,23 +539,57 @@ function recvDataMockup() {
 	//CMD: VEND REQUEST
     processSerialData([0x13, 0x00, 0x00, 0x01, 0x00, 0x01, 0x15]);
 	
-	isCoinMechPushes = true;
+	vendPollFlag = 1; // User pushes coin mech. escrow return 
 	//CMD: CANCEL VEND
 	processSerialData([0x13, 0x01, 0x14]);	
 	//CMD: POLL 
     processSerialData([0x12, 0x12]);
-	isCoinMechPushes = false;
+	vendPollFlag = -1; // User pushes coin mech. escrow return
 	
 	//CMD: SESSION COMPLETE
 	processSerialData([0x13, 0x04, 0x17]);
 	//CMD: POLL 
     processSerialData([0x12, 0x12]);
 	//CMD: ACK
+	processSerialData([0x00]);	
+	*/
+	// EXAMPLE VEND SESSION #5
+	// VMC Failure/product not dispensed refund positive
+	/**/
+	console.log('_________________________\n' + ' Starting Vend Session #5');
+	//CMD: POLL 
+    processSerialData([0x12, 0x12]);
+	//CMD: ACK
 	processSerialData([0x00]);
+	//CMD: VEND REQUEST
+    processSerialData([0x13, 0x00, 0x00, 0x01, 0x00, 0x01, 0x15]);	
+	// Reader deducts purchase price from payment media	
+	//CMD: POLL
+    processSerialData([0x12, 0x12]);
+	//VMC fails to dispense product
+	// CMD: Vend Failure
+	vendPollFlag = 2; // session failure
+	processSerialData([0x13, 0x03, 0x14]);
+	isRefundCompleted = false;
+	//CMD: POLL
+    processSerialData([0x12, 0x12]);
+	//CMD: POLL
+    processSerialData([0x12, 0x12]);
+	//CMD: POLL
+    processSerialData([0x12, 0x12]);
+	//CMD: POLL
+	isRefundCompleted = true;
+    processSerialData([0x12, 0x12]);
+	//CMD: SESSION COMPLETE
+	vendPollFlag = 3; // session complete
+	processSerialData([0x13, 0x04, 0x17]);	
+	//CMD: POLL
+    processSerialData([0x12, 0x12]);
+	//CMD: ACK
+	processSerialData([0x00]);	
+	vendPollFlag = -1; // default scenario in VEND -> POLL
 	// 
-	
-	
-	
+	/**/
     //CMD: POLL (for VALIDATOR)
     processSerialData([0x30, 0x30]);
 }

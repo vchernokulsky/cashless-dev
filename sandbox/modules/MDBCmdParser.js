@@ -9,7 +9,7 @@ var INTERNAL = {
 var SUB_CMD_LENGTH = {
     SETUP:     [6, 6],
     VEND:      [6, 2, 4, 2, 2, 6],
-    EXPANSION: [31],
+    EXPANSION: [6],
     READER:    [2, 2, 2]
 };
 
@@ -20,7 +20,7 @@ MDBCmdParser.prototype._appendCmdBytes = function(data) {
   for(var i=0; i<data.length; i++) {
     INTERNAL.buffer[INTERNAL.bufLen+i] = data[i];
   }
-  INTERNAL.bufLen += data.length;  
+  INTERNAL.bufLen += data.length; 
 }
 
 MDBCmdParser.prototype._buildResult = function() {
@@ -35,11 +35,10 @@ MDBCmdParser.prototype._buildResult = function() {
 MDBCmdParser.prototype.putData = function(data) {
   var cmd = -1;  //command 
   var sub = -1;  //subcommand
-  
   this._appendCmdBytes(data);
   if(INTERNAL.bufLen > 0) {
-    cmd = INTERNAL.buffer[0] & _MDB.MASK.COMMAND
-  }
+    cmd = INTERNAL.buffer[0] & _MDB.MASK.COMMAND;
+  } 
   if (INTERNAL.bufLen > 1) {
     sub = INTERNAL.buffer[1];
   }
@@ -75,7 +74,7 @@ MDBCmdParser.prototype.putData = function(data) {
         }
         break;
     case 0x07://_MDB.CASHLESS_MSG.EXPANSION:
-        if(INTERNAL.bufLen > SUB_CMD_LENGTH.EXPANSION[sub]) {
+        if(INTERNAL.bufLen > 1) {
             this._buildResult();
         }
         break;        
