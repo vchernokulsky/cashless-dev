@@ -62,12 +62,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="cashless_protocol.h" />
     <ClInclude Include="logger.h" />
     <ClInclude Include="MDBConst.h" />
+    <ClInclude Include="mdb_helper.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="logger.cpp" />
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="cashless_protocol.c" />
+    <ClCompile Include="logger.c" />
+    <ClCompile Include="main.c" />
+    <ClCompile Include="mdb_helper.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
