@@ -42,6 +42,30 @@ void test_power_up_sequence() {
 
 void test_single_vend_sequence() {
 	//TODO: test single vend session
+	unsigned char req_poll[2] = {0x12, 0x12};
+	unsigned char req_ack[1] = {0x00};
+	unsigned char req_vend_request[7] = {0x13, 0x00, 0x00, 0x01, 0x00, 0x01, 0x15};
+	unsigned char req_vend_succes[5] = {0x13, 0x02, 0x00, 0x01, 0x16};
+	unsigned char req_session_complete[3] = {0x13, 0x04, 0x17};
+
+	//CMD: POLL
+	process_message(req_poll);
+	//CMD: ACK
+	process_message(req_ack);
+	//CMD: VEND REQUEST
+	process_message(req_vend_request);
+	//CMD: POLL
+	process_message(req_poll);
+	//CMD: ACK
+	process_message(req_ack);
+	//CMD: VEND SUCCESS
+	process_message(req_vend_succes);
+	//CMD: SESSION COMPLETE
+	process_message(req_session_complete);
+	//CMD: POLL
+	process_message(req_poll);
+	//CMD: ACK
+	process_message(req_ack);
 }
 
 void test_scan_mdb_message() {
@@ -84,6 +108,7 @@ void test_scan_mdb_message() {
 void main() {
 	test_power_up_sequence();
 
+	test_single_vend_sequence();
 
 	//test_create_message();
 	system("pause");
