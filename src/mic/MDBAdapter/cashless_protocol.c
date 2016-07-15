@@ -1,6 +1,6 @@
 #include "MDBConst.h"
 #include "mdb_helper.h"
-#include "logger.h"
+//#include "logger.h"
 #include <stdio.h>
 
 
@@ -204,9 +204,9 @@ void process_session_idle(unsigned char* data){
 	int cmdId =    (int)(data[0] & MASK_CMD);
 	int subCmdId = -1;
 	switch (cmdId){
-		case ACK:
-			log("(IDLE)|RECV:ACK ; SEND: NOTHING");
-			break;
+//		case ACK:
+//			log("(IDLE)|RECV:ACK ; SEND: NOTHING");
+//			break;
 		case VEND:
 			subCmdId = (int)data[1];
 			switch(subCmdId) {
@@ -231,26 +231,28 @@ void process_session_idle(unsigned char* data){
 			}
 		break;
 		case POLL:
-			if (isSessionCanceled){
-				// send Session Cancel
-				fill_mbd_command(&resp, resp_session_cancel, 2);
+				fill_mbd_command(&resp, resp_ack, 1);
 				send_mdb_command(&resp);
-				//lastCmd = [0x04, 0x04];
-				fill_mbd_command(&last_cmd, resp_session_cancel, 2);
-				log("(IDLE)|RECV:SESSION_CANCEL ; SEND: 0x04 (SESSION CANCEL)");
-				// Session Cancel => set to zero balance
-				balanceReady = 0x00; // false					
-			} else {
-				// send End Session
-				fill_mbd_command(&resp, resp_end_session, 2);
-				send_mdb_command(&resp);
-				// lastCmd = [0x07, 0x07];
-				fill_mbd_command(&last_cmd, resp_end_session, 2);
-				_cashless_state = ST_ENABLED; 
-				log("(IDLE)|RECV:POLL ; SEND: 0x07 (END SESSION)");
-				// end Session => set to zero balance
-				balanceReady = 0x00; // false
-			}
+//			if (isSessionCanceled){
+//				// send Session Cancel
+//				fill_mbd_command(&resp, resp_session_cancel, 2);
+//				send_mdb_command(&resp);
+//				//lastCmd = [0x04, 0x04];
+//				fill_mbd_command(&last_cmd, resp_session_cancel, 2);
+//				log("(IDLE)|RECV:SESSION_CANCEL ; SEND: 0x04 (SESSION CANCEL)");
+//				// Session Cancel => set to zero balance
+//				balanceReady = 0x00; // false
+//			} else {
+//				// send End Session
+//				fill_mbd_command(&resp, resp_end_session, 2);
+//				send_mdb_command(&resp);
+//				// lastCmd = [0x07, 0x07];
+//				fill_mbd_command(&last_cmd, resp_end_session, 2);
+//				_cashless_state = ST_ENABLED;
+//				log("(IDLE)|RECV:POLL ; SEND: 0x07 (END SESSION)");
+//				// end Session => set to zero balance
+//				balanceReady = 0x00; // false
+//			}
 		break;
 	}
 }

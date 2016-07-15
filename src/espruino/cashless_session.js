@@ -468,7 +468,7 @@ function recvDataMockup() {
 	
 	// EXAMPLE VEND SESSION #1
 	// Valid Single Vend 
-	/*
+	/**/
 	console.log('Starting Vend Session');
     // Valid Single Vend session
     //CMD: POLL
@@ -489,7 +489,7 @@ function recvDataMockup() {
     processSerialData([0x12, 0x12]);
     //CMD: ACK
     processSerialData([0x00]);
-	*/
+	/**/
 	// EXAMPLE VEND SESSION #3 
 	// Session cancelled by user with reader return button
 	/*
@@ -555,7 +555,7 @@ function recvDataMockup() {
 	*/
 	// EXAMPLE VEND SESSION #5
 	// VMC Failure/product not dispensed refund positive
-	/**/
+	/*
 	console.log('_________________________\n' + ' Starting Vend Session #5');
 	//CMD: POLL 
     processSerialData([0x12, 0x12]);
