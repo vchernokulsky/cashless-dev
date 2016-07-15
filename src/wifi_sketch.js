@@ -20,6 +20,24 @@ var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
             });
           });
         });
-      });    
+      });
   }
 });
+
+
+TRANSPORT(MDB)  ->  LOGIC(http/RFID)
+POWERUP:00000000
+
+
+TRANSPORT(MDB)  <-  LOGIC(http/RFID)
+BALANCE:99999900
+
+
+
+
+AT+GMR
+AT version:0.40.0.0(Aug  8 2015 14:45:58)
+SDK version:1.3.0
+Ai-Thinker Technology Co.,Ltd.
+Build:1.3.0.2 Sep 11 2015 11:48:04
+OK
