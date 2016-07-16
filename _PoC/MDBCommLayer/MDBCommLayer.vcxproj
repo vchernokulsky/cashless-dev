@@ -68,9 +68,10 @@
     <ClInclude Include="mdb_helper.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\src\mic\MDBAdapter\main.c" />
     <ClCompile Include="cashless_protocol.c" />
     <ClCompile Include="logger.c" />
-    <ClCompile Include="main.c" />
+    <ClCompile Include="main1.c" />
     <ClCompile Include="mdb_helper.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

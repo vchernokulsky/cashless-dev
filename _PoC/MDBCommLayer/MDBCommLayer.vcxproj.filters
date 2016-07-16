@@ -34,7 +34,10 @@
     <ClCompile Include="logger.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="main.c">
+    <ClCompile Include="main1.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\mic\MDBAdapter\main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
