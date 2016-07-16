@@ -1,13 +1,13 @@
-var eth = null;
-
-var cur_uid = "";
-
 var balance = "";
 var curr_balance = "";
 var bin_curr_balance = "";
 var isPowerUp = false;
 var isVendDone = true;
 var chip = "";
+
+// WIFI configuration
+var ssid = "neiron";
+var pass = "msp430f2013";
 
 // function setupEthernet (){
   // // setup ethernet module
@@ -24,18 +24,14 @@ var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
     throw err;
   } else {
       wifi.reset(function(err) {
-        if (err) throw err;
+        if (err) {
+            console.log("Error WiFi module rset");
+            throw err;
+        }
         console.log("Connecting to WiFi");
-        wifi.connect("SauronAP","yuwb3795", function(err) {
+        wifi.connect(ssid, pass, function(err) {
           if (err) throw err;
           console.log("Connected");
-          // Now you can do something, like an HTTP request
-          // require("http").get("http://www.pur3.co.uk/hello.txt", function(res) {
-            // console.log("Response: ",res);
-            // res.on('data', function(d) {
-              // console.log("--->"+d);
-            //});
-          //});
         });
       });
   }
@@ -44,7 +40,8 @@ var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
 Serial4.setup(115200);
 
 function getBalance(chipUid) {
-  //var content = "chip=" + chipUid;
+  balance = "";
+  //var content = "chip=" + chipUid;  
   var content = "chip=011000000168435012";
   var options = {
 	host: 'sync.sportlifeclub.ru',
@@ -62,14 +59,14 @@ function getBalance(chipUid) {
   http.request(options, function(res) {
     console.log('Connected to Server');
     var nRecv = 0;
-    balance = "";
     res.on('data', function(data) {
       nRecv += data.length;
       balance += data;
     });
     res.on('close',function(data) {
       console.log("Server connection closed, " + nRecv + " bytes received.");  
-      console.log("Response: " + balance); 
+      console.log("Response: " + balance);
+      Serial4.write(balance + "\n");
     });
   }).end(content);
 }
@@ -99,7 +96,7 @@ function setBalance(chip, srvid, price) {
     });
     res.on('close',function(data) {
       console.log("Server connection closed, " + nRecv + " bytes received.");
-      console.log("Response: " + Resp); 
+      console.log("Response: " + Resp);
     });
   }).end(content);
 }
@@ -120,6 +117,7 @@ setInterval(function() {
     switch(prefix) {
       case 'POWERUP':
         isPowerUp = true;
+        isVendDone = true;        
         console.log('POWERUP recieved');
         break;
       case '__PRICE':
@@ -167,7 +165,6 @@ nfc.on('tag', function(error, data) {
         chip = data.uid;
         getBalance(data.uid);
         isVendDone = false; // rfid processing...
-        sendBalance(balance);
     }
     setTimeout(function () {
       nfc.listen();
@@ -175,8 +172,8 @@ nfc.on('tag', function(error, data) {
   }
 });
 
-function sendBalance(balance){
-    Serial2.write(balance);
+function sendBalance(aBalance){
+    Serial2.write(aBalance1);
 }
 
 function alignBinBalanceTo16(){

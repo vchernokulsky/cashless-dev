@@ -19,7 +19,7 @@ setWatch(function(){
             Serial4.write('__PRICE:00001000');
             console.log('SEND: __PRICE');
             break;
-        case 3: // __reset   
+        case 3: // __RESET
             Serial4.write('__RESET:00000000');
             console.log('SEND: __RESET');
             count = 0;
