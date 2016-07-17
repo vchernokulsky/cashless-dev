@@ -1,5 +1,3 @@
-//#define __PC_STUB__
-
 // Cashless Device states
 #define ST_INACTIVE     0x01
 #define ST_DISABLED     0x02

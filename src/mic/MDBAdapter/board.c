@@ -1,35 +1,44 @@
+#include <stdlib.h>
+#include <string.h>
+
 #include "stm32f0xx.h"
 #include "system_stm32f0xx.h"
 #include "stm32f0xx_conf.h"
 #include "stm32f0xx_it.h"
 
+#define DMA_USART2_Tx_Channel	DMA1_Channel4
+#define DMA_USART2_Rx_Channel	DMA1_Channel5
+
+#define TX_BUFF_LENGH	128
+#define RX_BUFF_LENGH	128
+
 ////////////////////////////////////////////
-// declare pripherial structures
+// declare peripheral structures
 GPIO_InitTypeDef  GPIOInitStructl;
 USART_InitTypeDef USART_InitStructure;
 SPI_InitTypeDef   SPI_InitStruct;
 GPIO_TypeDef      GPType;
+
+// declare variables for transport layers
+volatile uint8_t txbuf[TX_BUFF_LENGH];
+volatile uint8_t rx_buf[RX_BUFF_LENGH];
+volatile char asc[5];
+
 
 ////////////////////////////////////////////
 // function forward declarations
 
 // USART specific functions
 //void USART_pinout_config(void);
-void USARTInit(void);
-void DMA_USARTInit(void);
-//void USART1_IRQHandler(void);
-void USARTSend(uint16_t);
+void USART1_Init(void);
+unsigned short USART1_Recv();
+void USART1_Send(uint16_t);
 
-//SPI specific functions
-//void SPI_pinout_config(void);
-void SPIInit(void);
-int  SPIRead(uint8_t addr, uint8_t* buffer, int len);
-int  SPIWrite(uint8_t addr, uint8_t* buffer, int len);
-void SPICSOn(void);
-void SPICSOff(void);
-//void SPI_Write_Reg(unsigned char reg, unsigned char value);
-//unsigned char SPI_Read_Reg(unsigned char reg);
-
+void USART2_Init(void);
+unsigned short USART2_Recv();
+void USART2_Send(uint16_t);
+void USART2_DMA_Init(void);
+void USART2_Send_String(char* str);
 
 
 // public interface for use in main logic
@@ -37,81 +46,178 @@ void initialize_board() {
 	SystemInit();
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE);
 
-
-//	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1,ENABLE);
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1,ENABLE);
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1,ENABLE);
-	USARTInit();
-	USART_Cmd(USART1,ENABLE);
-	char byte = 0;
 
-//	DMA_USARTInit();
-//	USARTInit();
-//	USART_DMACmd(USART1,USART_DMAReq_Tx,ENABLE);
-//	USART_DMACmd(USART1,USART_DMAReq_Rx,ENABLE);
-//	DMA_Cmd(DMA1_Channel2,ENABLE);
-//	DMA_Cmd(DMA1_Channel3,ENABLE);
-//	USART_Cmd(USART1,ENABLE);
+	USART_DeInit(USART1);
+	USART_DeInit(USART2);
+	DMA_DeInit(DMA_USART2_Rx_Channel);
+	DMA_DeInit(DMA_USART2_Tx_Channel);
 
+	USART1_Init();
+
+	USART2_Init();
+	USART2_DMA_Init();
+	return;
 }
 ////////////////////////////////////////////////////////////////////////
 // concrete peripherial initialization
 // this functions must be encapsulated in this source file
 
 // USART functions implementation
-void USARTInit(void) {
-    GPIO_InitTypeDef GPIO_InitStructure;
-    USART_InitTypeDef USART_InitStructure;
+void USART1_Init(void) {
+	GPIO_InitTypeDef GPIO_InitStructure;
+	USART_InitTypeDef USART_InitStructure;
 
-    /* USARTx configured as follow:
-    - BaudRate = 115200 baud
+	USART_DeInit(USART1);
+
+	/* USARTx configured as follow:
+    - BaudRate = 9600 baud
     - Word Length = 8 Bits
     - One Stop Bit
     - No parity
     - Hardware flow control disabled (RTS and CTS signals)
     - Receive and transmit enabled
-    */
-    USART_InitStructure.USART_BaudRate = 9600;
-    USART_InitStructure.USART_WordLength = USART_WordLength_9b;
-    USART_InitStructure.USART_StopBits = USART_StopBits_1;
-    USART_InitStructure.USART_Parity = USART_Parity_No;
-    USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-    USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+	 */
+	USART_InitStructure.USART_BaudRate = 9600;
+	USART_InitStructure.USART_WordLength = USART_WordLength_9b;
+	USART_InitStructure.USART_StopBits = USART_StopBits_1;
+	USART_InitStructure.USART_Parity = USART_Parity_No;
+	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
 
-    /* Enable GPIO clock */
-    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE);
+	/* Enable GPIO clock */
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE);
 
-    /* Enable USART clock */
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+	/* Enable USART clock */
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
 
 
-    /* Configure USART Tx, Rx as alternate function push-pull */
-//    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2 | GPIO_Pin_3;
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9 | GPIO_Pin_10; // For STM32 devboard
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
+	/* Configure USART Tx, Rx as alternate function push-pull */
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9 | GPIO_Pin_10; // For STM32 devboard
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
 
-    /* Connect PXx to USARTx_Tx */
-//    GPIO_PinAFConfig(GPIOA, GPIO_PinSource2, GPIO_AF_1);
-    GPIO_PinAFConfig(GPIOA, GPIO_PinSource9, GPIO_AF_1);
+	/* Connect PXx to USARTx_Tx */
+	GPIO_PinAFConfig(GPIOA, GPIO_PinSource9, GPIO_AF_1);
 
-    /* Connect PXx to USARTx_Rx */
-//    GPIO_PinAFConfig(GPIOA, GPIO_PinSource3, GPIO_AF_1);
-    GPIO_PinAFConfig(GPIOA, GPIO_PinSource10, GPIO_AF_1);
+	/* Connect PXx to USARTx_Rx */
+	GPIO_PinAFConfig(GPIOA, GPIO_PinSource10, GPIO_AF_1);
 
-    /* USART configuration */
-    USART_Init(USART1, &USART_InitStructure);
+	/* USART configuration */
+	USART_Init(USART1, &USART_InitStructure);
+	USART_Cmd(USART1,ENABLE);
 }
 
-void DMA_USARTInit(void) {
+void USART1_Send(unsigned short data) {
+
+	USART_SendData(USART1, (uint16_t)data);
+	while (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET)
+	{}
+	return;
+}
+
+unsigned short USART1_Recv() {
+	while(USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET)
+	{}
+
+	uint16_t tbyte = USART_ReceiveData(USART1);
+	return (unsigned short)tbyte;
+}
+
+
+
+void USART2_Init(void)
+{
+	GPIO_InitTypeDef GPIO_InitStructure;
+	USART_InitTypeDef USART_InitStructure;
+
+	USART_DeInit(USART2);
+	/* USARTx configured as follow:
+	    - BaudRate = 115200 baud
+	    - Word Length = 8 Bits
+	    - One Stop Bit
+	    - No parity
+	    - Hardware flow control disabled (RTS and CTS signals)
+	    - Receive and transmit enabled
+	 */
+	USART_InitStructure.USART_BaudRate = 115200;
+	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+	USART_InitStructure.USART_StopBits = USART_StopBits_1;
+	USART_InitStructure.USART_Parity = USART_Parity_No;
+	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+
+	/* Enable GPIO clock */
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE);
+
+	/* Enable USART clock */
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
+
+
+	/* Configure USART Tx, Rx as alternate function push-pull */
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2 | GPIO_Pin_3;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+	/* Connect PXx to USARTx_Tx */
+	GPIO_PinAFConfig(GPIOA, GPIO_PinSource2, GPIO_AF_1);
+
+	/* Connect PXx to USARTx_Rx */
+	GPIO_PinAFConfig(GPIOA, GPIO_PinSource3, GPIO_AF_1);
+
+	/* USART configuration */
+	USART_Init(USART2, &USART_InitStructure);
+	USART_Cmd(USART2,ENABLE);
+}
+
+
+unsigned short USART2_Recv()
+{
+	while(USART_GetFlagStatus(USART2, USART_FLAG_RXNE) == RESET)
+	{}
+
+	uint16_t tbyte = USART_ReceiveData(USART2);
+	return (unsigned short)tbyte;
+}
+
+void USART2_Send(uint16_t data)
+{
+	USART_SendData(USART2, (uint16_t)data);
+	while (USART_GetFlagStatus(USART2, USART_FLAG_TXE) == RESET)
+	{}
+
+	return;
+}
+
+void USART2_Send_String(char* str)
+{
+//	while(!(USART1->SR & USART_SR_TC)); //Проверяем установку флага TC - завершения предыдущей передачи
+//	TODO:Check the end of transmition
+//	while(USART_GetFlagStatus(USART1,USART_FLAG_TC) == RESET);
+
+	DMA_Cmd(DMA_USART2_Tx_Channel,DISABLE);
+	memset((void*)txbuf, 0, TX_BUFF_LENGH);
+	strcat((char*)txbuf, str);
+	DMA_SetCurrDataCounter(DMA_USART2_Tx_Channel, strlen((void*)txbuf));
+	DMA_Cmd(DMA_USART2_Tx_Channel,ENABLE);
+	return;
+	}
+
+
+void USART2_DMA_Init(void) {
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1,ENABLE);
 
 	// Tx over DMA init
 	DMA_InitTypeDef dma;
 	DMA_StructInit(&dma);
-	dma.DMA_PeripheralBaseAddr = (uint32_t)&(USART1->TDR);
+	dma.DMA_PeripheralBaseAddr = (uint32_t)&(USART2->TDR);
 	dma.DMA_MemoryBaseAddr = (uint32_t)txbuf;
 	dma.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
 	dma.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
@@ -122,11 +228,11 @@ void DMA_USARTInit(void) {
 	dma.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
 	dma.DMA_Priority = DMA_Priority_Low;
 	dma.DMA_Mode = DMA_Mode_Normal;
-	DMA_Init(DMA1_Channel2,&dma);
+	DMA_Init(DMA_USART2_Tx_Channel,&dma);
 
 	// Rx over DMA init
 	DMA_StructInit(&dma);
-	dma.DMA_PeripheralBaseAddr = (uint32_t)&(USART1->RDR);
+	dma.DMA_PeripheralBaseAddr = (uint32_t)&(USART2->RDR);
 	dma.DMA_MemoryBaseAddr = (uint32_t)rx_buf;
 	dma.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
 	dma.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
@@ -137,210 +243,53 @@ void DMA_USARTInit(void) {
 	dma.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
 	dma.DMA_Priority = DMA_Priority_Low;
 	dma.DMA_Mode = DMA_Mode_Circular;
-	DMA_Init(DMA1_Channel3,&dma);
+	DMA_Init(DMA_USART2_Rx_Channel,&dma);
+
+	USART_DMACmd(USART2,USART_DMAReq_Tx,ENABLE);
+	USART_DMACmd(USART2,USART_DMAReq_Rx,ENABLE);
+	DMA_Cmd(DMA_USART2_Tx_Channel,ENABLE);
+	DMA_Cmd(DMA_USART2_Rx_Channel,ENABLE);
 }
 
-void USARTSend(uint16_t data) {
-	USART_SendData(USART1, data);
-	while (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET)
-	{}
-}
+int read_balance() {
+	int i = 0;
+	int val = 0;
+	char sBalance[16];
 
-void USARTRead() {
-}
-
-// SPI functions implementation
-void SPIInit(void) {
-	SPI_Cmd(SPI1,DISABLE);
-	SPI_I2S_DeInit(SPI1);
-
-	GPIO_InitTypeDef GPIO_InitStruct;
-
-
-	/** SPI1 GPIO Configuration
-				 PA4	 ------> SPI1_NSS
-				 PA5	 ------> SPI1_SCK
-				 PA6	 ------> SPI1_MISO
-				 PA7	 ------> SPI1_MOSI
-	 */
-
-
-	/*Enable or disable the AHB peripheral clock */
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE);
-
-	/*Configure GPIO pin */
-	GPIO_InitStruct.GPIO_Pin = GPIO_Pin_4;
-	GPIO_InitStruct.GPIO_Mode = GPIO_Mode_OUT;
-	GPIO_InitStruct.GPIO_OType = GPIO_OType_PP;
-	GPIO_InitStruct.GPIO_PuPd = GPIO_PuPd_NOPULL;
-	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_10MHz;
-	GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-	/*Configure GPIO pin */
-	GPIO_InitStruct.GPIO_Pin = GPIO_Pin_5|GPIO_Pin_7;
-	GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF;
-	GPIO_InitStruct.GPIO_OType = GPIO_OType_PP;
-	GPIO_InitStruct.GPIO_PuPd = GPIO_PuPd_DOWN;
-	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_10MHz;
-	GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-	/*Configure GPIO pin */
-	GPIO_InitStruct.GPIO_Pin = GPIO_Pin_6;
-	GPIO_InitStruct.GPIO_Mode = GPIO_Mode_AF;
-	GPIO_InitStruct.GPIO_OType = GPIO_OType_PP;
-	GPIO_InitStruct.GPIO_PuPd = GPIO_PuPd_NOPULL;
-	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_10MHz;
-	GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-	/*Configure GPIO pin alternate function */
-	//			GPIO_PinAFConfig(GPIOA, GPIO_PinSource4, GPIO_AF_0);
-
-	/*Configure GPIO pin alternate function */
-	GPIO_PinAFConfig(GPIOA, GPIO_PinSource5, GPIO_AF_0);
-
-	/*Configure GPIO pin alternate function */
-	GPIO_PinAFConfig(GPIOA, GPIO_PinSource6, GPIO_AF_0);
-
-	/*Configure GPIO pin alternate function */
-	GPIO_PinAFConfig(GPIOA, GPIO_PinSource7, GPIO_AF_0);
-
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1,ENABLE);
-
-
-	SPI_InitTypeDef spi;
-	spi.SPI_CPOL = SPI_CPOL_Low;
-	spi.SPI_CPHA = SPI_CPHA_1Edge;
-	spi.SPI_DataSize = SPI_DataSize_8b;
-	spi.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
-	spi.SPI_FirstBit = SPI_FirstBit_MSB;
-	spi.SPI_Mode = SPI_Mode_Master;
-	spi.SPI_NSS = SPI_NSS_Soft;
-	spi.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_256;
-
-	SPI_Init(SPI1,&spi);
-
-	SPI_Cmd(SPI1,ENABLE);
-
-	SPICSOff();
-
-	}
-
-void SPICSOn(void) {
-	GPIO_ResetBits(GPIOA,GPIO_Pin_4);
-	return;
-	}
-
-void SPICSOff(void) {
-	GPIO_SetBits(GPIOA,GPIO_Pin_4);
-	return;
-}
-
-int SPIRead(uint8_t addr, uint8_t* buffer, int len) {
-	SPI_I2S_ReceiveData16(SPI1);
-
-	uint8_t t = 0;
-	uint8_t multi = RESET;
-	uint16_t rxdata = 0;
-
-	if(len <= 0)
-	{
-		return -1;
-	}
-
-	//		 It's a multiple read operation
-	if(len > 1)
-	{
-		multi = SET;
-		addr |= (1 << 6);
-	}
-
-	addr |= (1 << 7);
-
-	SPICSOn();
-
-	//		 Send address
-	while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_BSY) == SET)
-			;
-
-	if(multi == RESET)
-	{
-		while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET)
-			;
-
-		SPI_I2S_SendData16(SPI1,addr);
-		while(SPI_I2S_GetFlagStatus(SPI1,SPI_I2S_FLAG_BSY) == SET)
-			;
-		rxdata = SPI_I2S_ReceiveData16(SPI1);
-		t = (uint8_t)(rxdata >> 8);
-		*buffer++ = t;
-	}
-	else {
-
-		while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET)
-			;
-		SPI_I2S_SendData16(SPI1,addr);
-		while(SPI_I2S_GetFlagStatus(SPI1,SPI_I2S_FLAG_BSY) == SET)
-			;
-		rxdata = SPI_I2S_ReceiveData16(SPI1);
-		t = (uint8_t)((rxdata & 0xFF00) >> 8);
-		*buffer++ = t;
-		len--;
-		while(len-- > 0 ){
-			while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET)
-				;
-
-			SPI_I2S_SendData16(SPI1,0);
-			while(SPI_I2S_GetFlagStatus(SPI1,SPI_I2S_FLAG_BSY) == SET)
-				;
-			rxdata = SPI_I2S_ReceiveData16(SPI1);
-
-
-			t = (uint8_t)(rxdata);
-			*buffer++ = t;
-			if (len > 0) {
-				t = (uint8_t)((rxdata & 0xFF00) >> 8);
-				*buffer++ = t;
-				len--;
-			}
+	DMA_Cmd(DMA_USART2_Rx_Channel,DISABLE);
+	memset(sBalance, 0x00, 16);
+	for(i=0; i<16; i++) {
+		if(txbuf[i] != '\n') {
+			sBalance[i] = rx_buf[i];
+			rx_buf[i] = 0x00;
 		}
 	}
-
-	SPICSOff();
-	return 0 ;
+	DMA_Cmd(DMA_USART2_Rx_Channel,ENABLE);
+	val = atoi(sBalance);
+	return val;
 }
 
-int SPIWrite(uint8_t addr, uint8_t* buffer, int len) {
-	if(len <= 0)
-	{
-		return -1;
-	}
+void delay_ms(uint32_t ms)
+{
+	volatile uint32_t nCount;
+	RCC_ClocksTypeDef RCC_Clocks;
+	RCC_GetClocksFreq (&RCC_Clocks);
 
-	//		 It's a multiple write operation
-	if(len > 1)
-	{
-		addr |= (1 << 6);
-	}
-
-	//		 Transmission start: pull CS low
-
-	SPICSOn();
-
-	while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET)
-				;
-
-	//		 Send address
-	SPI_SendData8(SPI1,addr);
-	while(SPI_I2S_GetFlagStatus(SPI1,SPI_I2S_FLAG_BSY) == SET)
-		;
-
-	//		 Send data
-	while(len--){
-		while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET){}
-		SPI_SendData8(SPI1, *buffer++);
-
-		while(SPI_I2S_GetFlagStatus(SPI1,SPI_I2S_FLAG_BSY) == SET)
-			;
-	}
-	SPICSOff();
-	return 0 ;
+	nCount=(RCC_Clocks.HCLK_Frequency/10000)*ms;
+	for (; nCount!=0; nCount--);
 }
+
+void itoa1(unsigned int binval)
+{
+	register unsigned int temp,val;
+	register char binc,atemp;
+
+	val=binval;
+
+	atemp='0'; temp=10000; while(val >= temp) {atemp++; val-=temp;};*(asc+0)=atemp;
+	atemp='0'; temp=1000; while(val >= temp) {atemp++; val-=temp;};*(asc+1)=atemp;
+	atemp='0'; temp=100; while(val >= temp) {atemp++; val-=temp;};*(asc+2)=atemp;
+	atemp='0'; binc=(char)val; while(binc >= 10) {atemp++; binc-=10;};*(asc+3)=atemp;
+	binc+='0';*(asc+4)=binc;
+}
+

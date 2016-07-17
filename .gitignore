@@ -23,3 +23,9 @@ src/mic/.metadata/.plugins/org.eclipse.core.resources/.history/
 
 
 src/espruino/sniffer
+src/mic/MDBAdapter/.settings/
+src/mic/MDBAdapter/.project
+src/mic/MDBAdapter/Debug
+src/mic/MDBAdapter/settings/MDBAdapter.dni
+
+src/mic/MDBAdapter/.cproject

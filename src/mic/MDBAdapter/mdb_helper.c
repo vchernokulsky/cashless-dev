@@ -1,13 +1,14 @@
+#include "platform.h"
+
 #include "MDBConst.h"
 #include "mdb_helper.h"
 #include <string.h>
-#ifdef __PC_STUB__
+#ifdef __PLATFORM_PC__
 	#include <stdio.h>
 	#include <memory.h>
-#else
+#elif defined(__PLATFORM_STM32__)
 	void (*UARTwritestream)(uint16_t Data );
-	void CashlessProtocoInit(void (*writestream)(uint16_t Data ))
-	{
+	void CashlessProtocoInit(void (*writestream)(uint16_t Data )) {
 		UARTwritestream = writestream;
 	}
 #endif
@@ -104,7 +105,7 @@ unsigned short check_for_mdb_command(char input) {
 }
 
 void send_mdb_command(struct Response *data) {
-#ifdef __PC_STUB__
+#ifdef __PLATFORM_PC__
 	unsigned int i = 0;
 	for(i=0; i<data->length; i++) {
 		unsigned int val = (unsigned int)data->buffer[i];

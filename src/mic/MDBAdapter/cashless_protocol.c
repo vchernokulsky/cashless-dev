@@ -1,11 +1,15 @@
-#include "MDBConst.h"
-#include "mdb_helper.h"
-//#include "logger.h"
 #include <stdio.h>
 
+#include "MDBConst.h"
+#include "mdb_helper.h"
+#include "board.h"
+//#include "logger.h"
+
+// declare specific constants
+unsigned short MAX_AMOUNT_VALUE = 65000;
 
 // internal flags
-unsigned short      balanceReady = 0x01; // true
+unsigned short      balanceReady = 0x00; // true
 unsigned short isSessionCanceled = 0x00; // false
 unsigned short isRefundCompleted = 0x00; // false
 unsigned short isSessionComplete = 0x00; // false
@@ -24,24 +28,16 @@ struct Response last_cmd;
 struct Response resp;
 
 
+void log(const char *msg) {}
+
 
 void getBalanceArray(unsigned short tmpBalance, char* result){
-	char tmp[2] = {0,0};
 	char chk;
-	int i = 0;
 	result[0] = 0x03;
 	result[1] = (char)(tmpBalance >> 8);
 	result[2] = (char)(tmpBalance & 0x00FF);
 	chk = calculate_checksum(result,4); 
 	result[3] = chk;
-	/*
-	printf("\n ------>>> ");
-	for(i=0; i<4; i++){	
-		printf("0x%02x",(unsigned char)result[i]);
-		printf(" ");
-	}
-	printf("\n");
-	*/
 }
 
 void process_inactive(unsigned char* data) {
@@ -143,6 +139,8 @@ void process_disabled(unsigned char* data){
 					fill_mbd_command(&resp, resp_ack, 1);
 					send_mdb_command(&resp);
 					_cashless_state = ST_ENABLED;
+					// SEND to Espruino
+					USART2_Send_String("POWERUP:00000000");
 					log("(DISABLED)|RECV:READER [reader enable]; SEND: Reader Enable\n");
 				break;
 				case 0x00: // Reader Disable
@@ -168,29 +166,28 @@ void process_disabled(unsigned char* data){
 
 void process_enabled(unsigned char* data){
 	char resp_ack[1] = {0x00};
-	char* balance;
 	char result[4] = {0,0,0,0};
 
 	int cmdId =    (int)(data[0] & MASK_CMD);
-	int subCmdId = -1;
+	//int subCmdId = -1;
 	switch (cmdId){
-		case POLL: 
-			if (!balanceReady){ // 
-				// balance is not ready
-				// Send ACK to VMC
-				fill_mbd_command(&resp, resp_ack, 1);
-				send_mdb_command(&resp);
-			} else { // BEGIN SESSION
-				// balance value is available
-				//  how to get balance value???
-				getBalanceArray(54000, result); // 540.00 rubles
-				cur_balance = 54000;
+		case POLL:
+			cur_balance = read_balance();
+			if (cur_balance > 0) {  // BEGIN SESSION
+				//TODO: how we can send balance > 650RUB to VMC?
+				cur_balance = cur_balance > MAX_AMOUNT_VALUE ? MAX_AMOUNT_VALUE : cur_balance;
+				getBalanceArray(cur_balance, result);
 				fill_mbd_command(&resp, result, 4);
 				send_mdb_command(&resp);
 				// safe to last_cmd
 				fill_mbd_command(&last_cmd, result, 4);
 				_cashless_state = ST_IDLE;
 				log("(ENABLED)|RECV:POLL ; SEND: BEGIN SESSION");
+			} else {
+				// balance is not ready
+				// Send ACK to VMC
+				fill_mbd_command(&resp, resp_ack, 1);
+				send_mdb_command(&resp);
 			}
 		break; 
 	}
@@ -198,8 +195,8 @@ void process_enabled(unsigned char* data){
 
 void process_session_idle(unsigned char* data){
 	char resp_ack[1] = {0x00};
-	char resp_session_cancel[2] = {0x04,0x04};
-	char resp_end_session[2] = {0x07,0x07};
+//	char resp_session_cancel[2] = {0x04,0x04};
+//	char resp_end_session[2] = {0x07,0x07};
 	int value = 0;
 	int cmdId =    (int)(data[0] & MASK_CMD);
 	int subCmdId = -1;
@@ -261,9 +258,6 @@ void process_vend(unsigned char* data){
 	char resp_ack[1] = {0x00};
 	char chk;
 	int cmdId =    (int)(data[0] & MASK_CMD);
-	int i = 0;
-	//char tmp[3] = {0,0,0};
-	char shifted_value;
 	char commad_to_send[4] = {0,0,0,0};
 
 
@@ -334,7 +328,7 @@ void process_vend(unsigned char* data){
 }
 
 void process_message(unsigned char* data) {
-	int cmd = (int)(data[0] & MASK_CMD);
+	//int cmd = (int)(data[0] & MASK_CMD);
 	switch(_cashless_state) {
 		case ST_INACTIVE:
 			process_inactive(data);
