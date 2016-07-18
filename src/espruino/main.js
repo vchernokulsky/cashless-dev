@@ -103,44 +103,46 @@ function setBalance(chip, srvid, price) {
   }).end(content);
 }
 
-
-
-
-var CMD_LEN = 16;
 var command = '';
-var CMD_LEN = 16;
-var command = '';
+var buffer  = '';
 setInterval(function() {
-  if(Serial4.available() >= CMD_LEN) {
-    command = Serial4.read(CMD_LEN);
-    console.log('comman::' + command);
-    // process command
-    var prefix = command.substr(0, 7);
+    var chars = Serial4.available();
+    if(chars > 0) {
+      buffer += Serial.read(chars);
+      var lastIdx = buffer.indexOf('\n');
+      if(lastIdx > 0) {
+        command = buffer.substring(0, lastIdx);
+        buffer = buffer.substring(lastIdx, buffer.length-1);
+        processTransportLayerCmd(command);
+      }
+    }
+}, 5);
+
+var PREFIX_LEN = 5;
+function processTransportLayerCmd(cmd) {
+    var prefix = cmd.substr(0, PREFIX_LEN);
     switch(prefix) {
-      case 'POWERUP':
+      case 'PWRUP':          //PWRUP
         isPowerUp = true;
         isVendDone = true;        
         console.log('POWERUP recieved');
         break;
-      case '__PRICE':
-        //chip = 
+      case 'PRICE':          //PRICE:<VALUE>
         srvid = 8633;
-        price = command.substr(8, 8);
+        price = (cmd.split(':'))[1];
         setBalance(chip, srvid, price);
         isVendDone = true;
-        console.log('__PRICE recieved: ' + price);
+        console.log('PRICE recieved: ' + price);
         break;
-      case '__RESET':
+      case 'RESET':          //RESET
         isVendDone = true;
-        console.log('__RESET recieved');
+        console.log('RESET recieved');
         break;
       default:
-        console.log("Incorrect command recieved");
-        command = '';
+        //just log message
+        console.log('LOG: ' + cmd);
     }
-    command = '';
-  }
-}, 5);
+}
 
 // setup RFID module
 I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
