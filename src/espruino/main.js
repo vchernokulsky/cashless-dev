@@ -125,7 +125,7 @@ function processTransportLayerCmd(cmd) {
       case 'PWRUP':          //PWRUP
         isPowerUp = true;
         isVendDone = true;        
-        console.log('POWERUP recieved');
+        console.log('PWRUP recieved');
         break;
       case 'PRICE':          //PRICE:<VALUE>
         srvid = 8633;
