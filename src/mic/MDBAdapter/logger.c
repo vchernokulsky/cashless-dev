@@ -1,14 +1,19 @@
 #include "platform.h"
 
-#include <stdio.h>
+#include <string.h>
+
 #if defined(__PLATFORM_PC__)
 	#include <memory.h>
-	#include <string.h>
+	#include <stdio.h>
+#elif defined(__PLATFORM_STM32__)
+	#include "board.h"
 #endif
 
 void log(const char *msg) {
 #if defined(__PLATFORM_PC__)
 	printf("%s", msg);
+#elif defined(__PLATFORM_STM32__)
+	USART2_Send_String(msg);
 #endif
 }
 
