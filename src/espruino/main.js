@@ -6,8 +6,10 @@ var isVendDone = true;
 var chip = "";
 
 // WIFI configuration
-var ssid = "neiron";
-var pass = "msp430f2013";
+//var ssid = "neiron";
+//var pass = "msp430f2013";
+var ssid = "service";
+var pass = "921249514821";
 
 // function setupEthernet (){
   // // setup ethernet module

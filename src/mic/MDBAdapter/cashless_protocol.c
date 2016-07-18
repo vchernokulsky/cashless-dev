@@ -1,9 +1,14 @@
+#include "platform.h"
+
 #include <stdio.h>
 
 #include "MDBConst.h"
 #include "mdb_helper.h"
-#include "board.h"
-//#include "logger.h"
+#include "logger.h"
+
+#if defined(__PLATFORM_STM32__)
+	#include "board.h"
+#endif
 
 // declare specific constants
 unsigned short MAX_AMOUNT_VALUE = 65000;
@@ -26,9 +31,6 @@ unsigned int  _delay_state;
 struct Response delay_cmd;
 struct Response last_cmd;
 struct Response resp;
-
-
-void log(const char *msg) {}
 
 
 void getBalanceArray(unsigned short tmpBalance, char* result){
@@ -140,7 +142,7 @@ void process_disabled(unsigned char* data){
 					send_mdb_command(&resp);
 					_cashless_state = ST_ENABLED;
 					// SEND to Espruino
-					USART2_Send_String("POWERUP:00000000");
+					send_to_espruino("POWERUP:00000000\n", 17);
 					log("(DISABLED)|RECV:READER [reader enable]; SEND: Reader Enable\n");
 				break;
 				case 0x00: // Reader Disable
@@ -263,27 +265,19 @@ void process_vend(unsigned char* data){
 
 	int subCmdId = -1;
 	switch (cmdId){
-		case ACK:
-			log("(VEND)|RECV:ACK ; SEND: NOTHING");
-			break;
+		//case ACK:
+		//	log("(VEND)|RECV:ACK ; SEND: NOTHING");
+		//	break;
 		case POLL:
 			// No CoinMechanismPushes No SessionFailure
 			// VEND APPROVED
 			cur_balance -= item_price;
-			// не удается корректно разбить значение баланса
 			commad_to_send[0] = 0x03;
 			commad_to_send[1] = (char)(cur_balance >> 8);
 			commad_to_send[2] = (char)(cur_balance & 0x00FF);
-			chk = calculate_checksum(commad_to_send,4);                
+			chk = calculate_checksum(commad_to_send, 4);
 			commad_to_send[3] = chk;
-			/*
-			printf("\n ------>>> ");
-			for(i=0; i<4; i++){	
-				printf("0x%02x",(unsigned char)commad_to_send[i]);
-				printf(" ");
-			}
-			printf("\n");
-			*/
+
 			// send Vend Approved
 			fill_mbd_command(&resp,commad_to_send,4);
 			send_mdb_command(&resp);

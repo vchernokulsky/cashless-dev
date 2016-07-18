@@ -38,7 +38,7 @@ void USART2_Init(void);
 unsigned short USART2_Recv();
 void USART2_Send(uint16_t);
 void USART2_DMA_Init(void);
-void USART2_Send_String(char* str);
+void USART2_Send_String(const char *str);
 
 
 // public interface for use in main logic
@@ -196,7 +196,7 @@ void USART2_Send(uint16_t data)
 	return;
 }
 
-void USART2_Send_String(char* str)
+void USART2_Send_String(const char *str)
 {
 //	while(!(USART1->SR & USART_SR_TC)); //Проверяем установку флага TC - завершения предыдущей передачи
 //	TODO:Check the end of transmition
@@ -251,7 +251,7 @@ void USART2_DMA_Init(void) {
 	DMA_Cmd(DMA_USART2_Rx_Channel,ENABLE);
 }
 
-int read_balance() {
+int get_user_balance() {
 	int i = 0;
 	int val = 0;
 	char sBalance[16];

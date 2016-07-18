@@ -15,3 +15,8 @@ void send_mdb_command(struct Response *data);
 void fill_mbd_command(struct Response *resp, const char* buffer, int length);
 
 void clear_mdb_command(struct Response *resp);
+
+int read_balance();
+
+// espruino communication layer
+void send_to_espruino(const char *cmd, unsigned int length);
