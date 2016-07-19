@@ -19,6 +19,7 @@ var pass = "921249514821";
   // eth.setIP({ip: "172.18.29.54", subnet: "255.255.224.0", gateway: "172.18.0.1", dns: "172.18.0.1"});
 // }
 
+// serial for wifi commuinication
 Serial2.setup(115200, { rx: A3, tx : A2 });
 var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
   if (err) {
@@ -27,7 +28,7 @@ var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
   } else {
       wifi.reset(function(err) {
         if (err) {
-            console.log("Error WiFi module rset");
+            console.log("Error WiFi module reset");
             throw err;
         }
         console.log("Connecting to WiFi");
@@ -39,11 +40,11 @@ var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
   }
 });
 
+// serial for MDB transport communication
 Serial4.setup(115200);
-
 function getBalance(chipUid) {
   balance = "";
-  //var content = "chip=" + chipUid;  
+  //TODO: read chip id from RFID
   var content = "chip=011000000168435012";
   var options = {
 	host: 'sync.sportlifeclub.ru',
@@ -68,6 +69,7 @@ function getBalance(chipUid) {
     res.on('close',function(data) {
       console.log("Server connection closed, " + nRecv + " bytes received.");  
       console.log("Response: " + balance);
+      // send balance to MDB transport
       Serial4.write(balance + "\n");
     });
   }).end(content);
@@ -86,7 +88,7 @@ function setBalance(chip, srvid, price) {
       "Content-Length":content.length
     }
   };
-  console.log('Connectiong to Server ... ');
+  console.log('Connecting to Server ... ');
   var http = require("http");
   http.request(options, function(res) {
     console.log('Connected to Server');
@@ -130,6 +132,7 @@ function processTransportLayerCmd(cmd) {
       case 'PRICE':          //PRICE:<VALUE>
         srvid = 8633;
         price = (cmd.split(':'))[1];
+        //TODO: set balance to SportLife server
         //setBalance(chip, srvid, price);
         isVendDone = true;
         console.log('PRICE recieved: ' + parseInt(price, 10)/100);
@@ -155,7 +158,7 @@ nfc.wakeUp(function(error) {
     print('RFID wake up OK');
     // слушаем новые метки
     nfc.listen();
-    }
+  }
 });
 // обработка взаимодействия с RFID меткой
 nfc.on('tag', function(error, data) {
@@ -164,7 +167,7 @@ nfc.on('tag', function(error, data) {
   } else {
     console.log(' ------ ');
     console.log(data);    // UID и ATQA
-    // TODO: convert UID to correct chipid
+    //TODO: convert UID to correct chipid
     if (isPowerUp & isVendDone){
         chip = data.uid;
         getBalance(data.uid);
@@ -175,14 +178,3 @@ nfc.on('tag', function(error, data) {
     }, 1000);
   }
 });
-
-function sendBalance(aBalance){
-    Serial2.write(aBalance1);
-}
-
-function alignBinBalanceTo16(){
-  var i = 0;
-  for (i = 0; i <= 15 && bin_curr_balance.length <= 15; i++){
-    bin_curr_balance = "0" + bin_curr_balance;
-  }
-}
