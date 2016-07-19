@@ -1,4 +1,5 @@
 #include "cashless_protocol.h"
+#include <stdio.h>
 
 void test_power_up_sequence() {
 	// declare MDB command stub
@@ -42,6 +43,12 @@ void test_single_vend_sequence() {
 	//CMD: ACK
 	process_message(req_ack);
 	//CMD: VEND REQUEST
+
+	// user waiting emulation
+	process_message(req_poll);
+	process_message(req_poll);
+	process_message(req_poll);
+
 	process_message(req_vend_request);
 	//CMD: POLL
 	process_message(req_poll);
@@ -59,5 +66,9 @@ void test_single_vend_sequence() {
 
 
 void main(void) {
+	int charcode;
 
+	test_power_up_sequence();
+	test_single_vend_sequence();
+	charcode = getchar();
 }
