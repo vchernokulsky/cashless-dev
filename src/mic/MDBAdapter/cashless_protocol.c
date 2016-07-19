@@ -1,6 +1,7 @@
 #include "platform.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "MDBConst.h"
 #include "mdb_helper.h"
@@ -24,6 +25,8 @@ unsigned short isSessionComplete = 0x00; // false
 unsigned short vend_result_variable = VEND_NOTHING;
 
 // for success single vend scenario
+char str_item_price[16];
+char str_espr_cmd[23];
 unsigned int item_price  = 0;
 unsigned int cur_balance = 0;
 
@@ -108,6 +111,8 @@ void process_inactive(unsigned char* data) {
 				break;
 			}
 		break;
+		default:
+			log("UNKNOWN COMMAND");
 	}
 }
 
@@ -146,8 +151,8 @@ void process_disabled(unsigned char* data){
 					send_mdb_command(&resp);
 					_cashless_state = ST_ENABLED;
 					// SEND to Espruino
-					send_to_espruino("POWERUP:00000000\n", 17);
-					log("(DISABLED)|RECV:READER [reader enable]; SEND: Reader Enable\n");
+					send_to_espruino("PWRUP\n", 6);
+					//log("(DISABLED)|RECV:READER [reader enable]; SEND: Reader Enable\n");
 				break;
 				case 0x00: // Reader Disable
 					fill_mbd_command(&resp, resp_ack, 1);
@@ -167,14 +172,18 @@ void process_disabled(unsigned char* data){
 				fill_mbd_command(&delay_cmd,pesn_expansion_id_request,4);
 			}
 		break;
+		default:
+			log("UNKNOWN COMMAND");
 	}
 }
 
 void process_enabled(unsigned char* data){
 	char resp_ack[1] = {0x00};
+	char resp_display[34] = {0x02, 100, 0x2E,0x36,0x39,0x3D,0x42,0x14,0x3C,0x35,0x38,0x3D,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14};
 	char result[4] = {0,0,0,0};
 
 	int cmdId =    (int)(data[0] & MASK_CMD);
+	int subCmdId = 0xFF;
 	switch (cmdId){
 		case POLL:
 			cur_balance = read_balance();
@@ -185,6 +194,7 @@ void process_enabled(unsigned char* data){
 				fill_mbd_command(&resp, result, 4);
 				send_mdb_command(&resp);
 				// safe to last_cmd
+				vend_result_variable = VEND_NOTHING;
 				fill_mbd_command(&last_cmd, result, 4);
 				_cashless_state = ST_IDLE;
 				log("(ENABLED)|RECV:POLL ; SEND: BEGIN SESSION\n");
@@ -193,8 +203,29 @@ void process_enabled(unsigned char* data){
 				// Send ACK to VMC
 				fill_mbd_command(&resp, resp_ack, 1);
 				send_mdb_command(&resp);
+				log("(ENABLED)|RECV:POLL ; SEND: ACK\n");
 			}
-		break; 
+		break;
+		case READER:
+			subCmdId = data[1];
+			switch(subCmdId) {
+			case 0x00: //reader disable
+				fill_mbd_command(&delay_cmd, resp_display, 34);
+				fill_mbd_command(&resp, resp_ack, 1);
+				send_mdb_command(&resp);
+				log("(ENABLED)|RECV:READER[READER DISABLE] ; SEND: ACK\n");
+				break;
+			case 0x01: // reader enable
+				log("(ENABLED)|RECV:READER ; SEND: ACK (READER ENABLE)\n");
+				break;
+			case 0x02: // reader cancel
+				// TODO: send 0x08 - canceled
+				log("(ENABLED)|RECV:READER ; SEND: ACK (READER CANCEL)\n");
+				break;
+			}
+			break;
+		default:
+			log("(ENABLED)|UNKNOWN COMMAND");
 	}
 }
 
@@ -227,7 +258,8 @@ void process_session_idle(unsigned char* data){
 					send_mdb_command(&resp);
 					log("(IDLE)|RECV:VEND(Session Complete) ; SEND: ACK\n");
 				break;
-				// другие sub 
+				default:
+					log("UNKNOWN SUBCOMMAND");
 			}
 		break;
 		case POLL:
@@ -254,33 +286,21 @@ void process_session_idle(unsigned char* data){
 					// lastCmd = [0x07, 0x07];
 					fill_mbd_command(&last_cmd, resp_end_session, 2);
 					_cashless_state = ST_ENABLED;
-					log("(IDLE)|RECV:POLL; SEND: 0x07 (END SESSION)\n");
+
+					memset(str_item_price, 0x00, 16);
+					memset(str_espr_cmd, 0x00, 23);
+					itoa(item_price, str_item_price);
+					strcat(str_espr_cmd, "PRICE:");
+					strcat(str_espr_cmd, str_item_price);
+					strcat(str_espr_cmd, "\n");
+					send_to_espruino(str_espr_cmd, strlen(str_espr_cmd));
+					//log("(IDLE)|RECV:POLL; SEND: 0x07 (END SESSION)\n");
 					// end Session => set to zero balance
-					isBalanceReady = 0x00; // false
 					break;
 			}
-			/*
-			if (isSessionCanceled){
-				// send Session Cancel
-				fill_mbd_command(&resp, resp_session_cancel, 2);
-				send_mdb_command(&resp);
-				//lastCmd = [0x04, 0x04];
-				fill_mbd_command(&last_cmd, resp_session_cancel, 2);
-				log("(IDLE)|RECV:SESSION_CANCEL; SEND: 0x04 (SESSION CANCEL)");
-				// Session Cancel => set to zero balance
-				isBalanceReady = 0x00; // false
-			} else {
-				// send End Session
-				fill_mbd_command(&resp, resp_end_session, 2);
-				send_mdb_command(&resp);
-				// lastCmd = [0x07, 0x07];
-				fill_mbd_command(&last_cmd, resp_end_session, 2);
-				_cashless_state = ST_ENABLED;
-				log("(IDLE)|RECV:POLL; SEND: 0x07 (END SESSION)");
-				// end Session => set to zero balance
-				isBalanceReady = 0x00; // false
-			}*/
 		break;
+		default:
+			log("UNKNOWN COMMAND");
 	}
 }
 
@@ -296,7 +316,7 @@ void process_vend(unsigned char* data){
 			// No CoinMechanismPushes No SessionFailure
 			// VEND APPROVED
 			cur_balance -= item_price;
-			commad_to_send[0] = 0x03;
+			commad_to_send[0] = 0x05;
 			commad_to_send[1] = (char)(cur_balance >> 8);
 			commad_to_send[2] = (char)(cur_balance & 0x00FF);
 			chk = calculate_checksum(commad_to_send, 4);
@@ -305,8 +325,6 @@ void process_vend(unsigned char* data){
 			// send Vend Approved
 			fill_mbd_command(&resp, commad_to_send, 4);
 			send_mdb_command(&resp);
-			//FIX: WTF??? delayed command equal to previous
-			fill_mbd_command(&last_cmd, commad_to_send, 4);
 			log("(VEND)|RECV:POLL; SEND: VEND APPROVED\n");
 		break; 
 		case VEND:
@@ -339,14 +357,20 @@ void process_vend(unsigned char* data){
 				break;
 				// process in failure scenario
 				case 0x04: // SESSION COMPLETE
-					fill_mbd_command(&resp,resp_ack,1);
+					fill_mbd_command(&resp, resp_ack, 1);
 					send_mdb_command(&resp);
+					_cashless_state = ST_IDLE;
+					//TODO: this response is not as MDB protocol
+					vend_result_variable = VEND_SUCCESS;
 					log("(VEND)|RECV:VEND[SESSION COMPLETE]; SEND: ACK\n");
-					isSessionComplete = 0x00; // true
 				break;
+				default:
+					log("UNKNOWN SUBCOMMAND");
+
 			}
-			// другие sub
 		break;
+		default:
+			log("UNKNOWN COMMAND");
 	}
 }
 

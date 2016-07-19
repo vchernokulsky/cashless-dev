@@ -23,7 +23,8 @@ GPIO_TypeDef      GPType;
 volatile uint8_t txbuf[TX_BUFF_LENGH];
 volatile uint8_t rx_buf[RX_BUFF_LENGH];
 volatile char asc[5];
-
+//
+volatile uint8_t last_dma_buff_idx = 0;
 
 ////////////////////////////////////////////
 // function forward declarations
@@ -202,11 +203,11 @@ void USART2_Send_String(const char *str)
 //	TODO:Check the end of transmition
 //	while(USART_GetFlagStatus(USART1,USART_FLAG_TC) == RESET);
 
-	DMA_Cmd(DMA_USART2_Tx_Channel,DISABLE);
+	DMA_Cmd(DMA_USART2_Tx_Channel, DISABLE);
 	memset((void*)txbuf, 0, TX_BUFF_LENGH);
 	strcat((char*)txbuf, str);
 	DMA_SetCurrDataCounter(DMA_USART2_Tx_Channel, strlen((void*)txbuf));
-	DMA_Cmd(DMA_USART2_Tx_Channel,ENABLE);
+	DMA_Cmd(DMA_USART2_Tx_Channel, ENABLE);
 	return;
 	}
 
@@ -251,18 +252,27 @@ void USART2_DMA_Init(void) {
 	DMA_Cmd(DMA_USART2_Rx_Channel,ENABLE);
 }
 
+
 int get_user_balance() {
-	int i = 0;
+	int i = 0, k = 0;
 	int val = 0;
-	char sBalance[16];
+	char sBalance[RX_BUFF_LENGH];
 
 	DMA_Cmd(DMA_USART2_Rx_Channel,DISABLE);
-	memset(sBalance, 0x00, 16);
-	for(i=0; i<16; i++) {
-		if(txbuf[i] != '\n') {
-			sBalance[i] = rx_buf[i];
+	memset(sBalance, 0x00, RX_BUFF_LENGH);
+	for(i=last_dma_buff_idx % (RX_BUFF_LENGH-1), k=0; i<RX_BUFF_LENGH; i++, k++) {
+		if(rx_buf[i] != '\n') {
+			if(rx_buf[i] != 0x00)
+				sBalance[k] = rx_buf[i];
+			sBalance[k] = rx_buf[i];
 			rx_buf[i] = 0x00;
 		}
+		else {
+			rx_buf[i] = 0x00;
+			last_dma_buff_idx = i+1;
+			break;
+		}
+
 	}
 	DMA_Cmd(DMA_USART2_Rx_Channel,ENABLE);
 	val = atoi(sBalance);
@@ -292,4 +302,32 @@ void itoa1(unsigned int binval)
 	atemp='0'; binc=(char)val; while(binc >= 10) {atemp++; binc-=10;};*(asc+3)=atemp;
 	binc+='0';*(asc+4)=binc;
 }
+
+void reverse(char *s)
+{
+    int i, j;
+    char c;
+
+    for (i = 0, j = strlen(s)-1; i<j; i++, j--) {
+        c = s[i];
+        s[i] = s[j];
+        s[j] = c;
+    }
+}
+
+void itoa(int n, char *s)
+ {
+     int i, sign;
+
+     if ((sign = n) < 0)  /* записываем знак */
+         n = -n;          /* делаем n положительным числом */
+     i = 0;
+     do {       /* генерируем цифры в обратном порядке */
+         s[i++] = n % 10 + '0';   /* берем следующую цифру */
+     } while ((n /= 10) > 0);     /* удаляем */
+     if (sign < 0)
+         s[i++] = '-';
+     s[i] = '\0';
+     reverse(s);
+ }
 

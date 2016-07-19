@@ -18,7 +18,7 @@ void log(const char *msg) {
 }
 
 void log_array(const char *msg, const char *arr, unsigned int arr_len) {
-#ifdef __PLATFORM_PC__
+#if  defined(__PLATFORM_PC__)
 	unsigned int i = 0;
 	char buffer[16];
 	char output[512];
@@ -32,5 +32,7 @@ void log_array(const char *msg, const char *arr, unsigned int arr_len) {
 	}
 	strcat(output, "\n");
 	log(output);
+#elif defined(__PLATFORM_STM32__)
+
 #endif
 }

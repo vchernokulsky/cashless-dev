@@ -108,7 +108,7 @@ var buffer  = '';
 setInterval(function() {
     var chars = Serial4.available();
     if(chars > 0) {
-      buffer += Serial.read(chars);
+      buffer += Serial4.read(chars);
       var lastIdx = buffer.indexOf('\n');
       if(lastIdx > 0) {
         command = buffer.substring(0, lastIdx);
@@ -130,9 +130,9 @@ function processTransportLayerCmd(cmd) {
       case 'PRICE':          //PRICE:<VALUE>
         srvid = 8633;
         price = (cmd.split(':'))[1];
-        setBalance(chip, srvid, price);
+        //setBalance(chip, srvid, price);
         isVendDone = true;
-        console.log('PRICE recieved: ' + price);
+        console.log('PRICE recieved: ' + parseInt(price, 10)/100);
         break;
       case 'RESET':          //RESET
         isVendDone = true;

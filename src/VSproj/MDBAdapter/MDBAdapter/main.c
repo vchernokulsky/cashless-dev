@@ -1,5 +1,6 @@
 #include "cashless_protocol.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 void test_power_up_sequence() {
 	// declare MDB command stub
@@ -67,8 +68,9 @@ void test_single_vend_sequence() {
 
 void main(void) {
 	int charcode;
-
-	test_power_up_sequence();
-	test_single_vend_sequence();
+	int val = atoi("00015");
+	printf("%i", val);
+	//test_power_up_sequence();
+	//test_single_vend_sequence();
 	charcode = getchar();
 }

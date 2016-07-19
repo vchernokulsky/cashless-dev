@@ -12,3 +12,5 @@ void itoa1(unsigned int binval);
 void USART2_Send_String(const char *str);
 
 int get_user_balance();
+
+void itoa(int n, char *s);
