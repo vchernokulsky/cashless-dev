@@ -3,7 +3,7 @@ var balance = "";
 var page2read = 0;
 //var ssid = "service";
 //var pass = "921249514821";
-var page3data, page4data, isReadDone = false;
+var page3data, page4data, page5data, isReadDone = false;
 
 
 var ssid = "Nexus777";
@@ -115,12 +115,15 @@ nfc.on('tag', function(error, data) {
           console.log('page ' + page2read + ' read error');
         } else {
           // печатаем результат чтения байт данных
-          print('page ' + page2read + ' read result: ', buffer);
-          if (page2read == 4){
+          console.log('page ' + page2read + ' read result: ', buffer);
+          if (page2read == 5){
             page3data = buffer;
           }
-          if (page2read == 5){
+          if (page2read == 6){
             page4data = buffer;
+          }
+          if (page2read == 7){
+            page5data = buffer;
             isReadDone = true;
           }
         }
@@ -128,12 +131,12 @@ nfc.on('tag', function(error, data) {
       page2read++;
     }
     if (isReadDone){
-      chip = (makeChipidByRFID(page3data) + makeChipidByRFID(page4data)).substring(0,18);
+      chip = (makeChipidByRFID(page3data) + makeChipidByRFID(page4data) + makeChipidByRFID(page5data)).substring(0,18);
       console.log(" Chipid from RFID: " + chip);
       getBalance(chip);
     }
   }
-// каждые 1000 миллисекунд слушаем новую метку
+  // каждые 1000 миллисекунд слушаем новую метку
   setTimeout(function () {
     nfc.listen();
   }, 1000);
@@ -156,34 +159,24 @@ setWatch(function(e) {
 function makeChipidByRFID(buffer){
   var result = "";
   for (var i = 0; i < buffer.length; i++){
-    result = result + makeArrayElem(buffer[i]);
+    result = result + makeElemToArray(buffer[i] % 100);
   }
   return result;
 }
 
-function makeArrayElem(elem){
+function makeElemToArray(elem){
   var res = "";
   if (elem === 0){
-    res = "000";
+    res = "00";
     return res;
   }
-  var counter = 0, i = 1, j = 0;
-  for (i=1; i<=2; i++){
-    if (Math.floor(elem/Math.pow(10,i)) === 0){
-      counter++;
-    }
-  }
-  if (counter === 0) {
-    res += elem;
+  if (Math.floor(elem/10) === 0){
+       res = "0" + elem;
   } else {
-    res = elem.toString();
-    for(j=0; j<counter; j++){
-       res = "0" + res;
-    }
+    res += elem;
   }
   return res;
 }
-
 function chipidToArray(chipid){
   var i = 0;
   var array = ["000","000","000","000","000","000","000","000"];
