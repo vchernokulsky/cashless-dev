@@ -19,27 +19,6 @@ var pass = "921249514821";
   // eth.setIP({ip: "172.18.29.54", subnet: "255.255.224.0", gateway: "172.18.0.1", dns: "172.18.0.1"});
 // }
 
-// serial for wifi commuinication
-Serial2.setup(115200, { rx: A3, tx : A2 });
-var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
-  if (err) {
-    console.log("Error WiFi module connection");
-    throw err;
-  } else {
-      wifi.reset(function(err) {
-        if (err) {
-            console.log("Error WiFi module reset");
-            throw err;
-        }
-        console.log("Connecting to WiFi");
-        wifi.connect(ssid, pass, function(err) {
-          if (err) throw err;
-          console.log("Connected");
-        });
-      });
-  }
-});
-
 // serial for MDB transport communication
 Serial4.setup(115200);
 function getBalance(chipUid) {
@@ -105,21 +84,6 @@ function setBalance(chip, srvid, price) {
   }).end(content);
 }
 
-var command = '';
-var buffer  = '';
-setInterval(function() {
-    var chars = Serial4.available();
-    if(chars > 0) {
-      buffer += Serial4.read(chars);
-      var lastIdx = buffer.indexOf('\n');
-      if(lastIdx > 0) {
-        command = buffer.substring(0, lastIdx);
-        buffer = buffer.substring(lastIdx, buffer.length-1);
-        processTransportLayerCmd(command);
-      }
-    }
-}, 5);
-
 var PREFIX_LEN = 5;
 function processTransportLayerCmd(cmd) {
     var prefix = cmd.substr(0, PREFIX_LEN);
@@ -133,8 +97,11 @@ function processTransportLayerCmd(cmd) {
         srvid = 8633;
         price = (cmd.split(':'))[1];
         //TODO: set balance to SportLife server
-        //setBalance(chip, srvid, price);
-        isVendDone = true;
+        var chip = "011000000168435012";
+        setBalance(chip, srvid, price);
+        setTimeout(function(){
+            isVendDone = true;
+        }, 30000);
         console.log('PRICE recieved: ' + parseInt(price, 10)/100);
         break;
       case 'RESET':          //RESET
@@ -147,34 +114,92 @@ function processTransportLayerCmd(cmd) {
     }
 }
 
-// setup RFID module
-I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
-// подключаем модуль к I2C1 и пину прерывания
-var nfc = require("nfc").connect({i2c: I2C1, irqPin: P9});
-nfc.wakeUp(function(error) {
-  if (error) {
-    print('RFID wake up error', error);
-  } else {
-    print('RFID wake up OK');
-    // слушаем новые метки
-    nfc.listen();
-  }
-});
+var nfc = null;
+function initPeripherial() {
+    // setup RFID module
+    I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
+    nfc = require("nfc").connect({i2c: I2C1, irqPin: P9});
+    nfc.wakeUp(function(error) {
+      if (error) {
+        print('RFID wake up error', error);
+      } else {
+        print('RFID wake up OK');
+        // слушаем новые метки
+        nfc.listen();
+      }
+    });
+    // setup WiFi module
+    Serial2.setup(115200, { rx: A3, tx : A2 });
+    var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
+      if (err) {
+        console.log("Error WiFi module connection");
+        throw err;
+      } else {
+          wifi.reset(function(err) {
+            if (err) {
+                console.log("Error WiFi module reset");
+                throw err;
+            }
+            console.log("Connecting to WiFi");
+            wifi.connect(ssid, pass, function(err) {
+              if (err) throw err;
+              console.log("Connected");
+            });
+          });
+      }
+    });
+}
+
+function startRFIDListening() {
 // обработка взаимодействия с RFID меткой
-nfc.on('tag', function(error, data) {
-  if (error) {
-    print('tag read error');
-  } else {
-    console.log(' ------ ');
-    console.log(data);    // UID и ATQA
-    //TODO: convert UID to correct chipid
-    if (isPowerUp & isVendDone){
-        chip = data.uid;
-        getBalance(data.uid);
-        isVendDone = false; // rfid processing...
-    }
-    setTimeout(function () {
-      nfc.listen();
-    }, 1000);
-  }
+    nfc.on('tag', function(error, data) {
+      if (error) {
+        print('tag read error');
+      } else {
+        console.log('RFID touched');
+        //setBalance("011000000168435012", "8633", "1000");        
+        //TODO: convert UID to correct chipid
+        if (isPowerUp & isVendDone){
+            console.log(data);    // UID и ATQA        
+            chip = data.uid;
+            getBalance(data.uid);
+            if (balance.length > 0) {
+                isVendDone = false; // rfid processing...
+            } else {
+                console.log("Balance IS NOT available");
+            }
+        }
+        setTimeout(function () {
+          nfc.listen();
+        }, 1000);
+      }
+    });
+}
+
+var command = '';
+var buffer  = '';
+function startSerialListening() {
+    setInterval(function() {
+        var chars = Serial4.available();
+        if(chars > 0) {
+          buffer += Serial4.read(chars);
+          var lastIdx = buffer.indexOf('\n');
+          if(lastIdx > 0) {
+            command = buffer.substring(0, lastIdx);
+            buffer = buffer.substring(lastIdx, buffer.length-1);
+            processTransportLayerCmd(command);
+          }
+        }
+    }, 5);
+}
+
+function initialize() {
+    initPeripherial();
+    startRFIDListening();
+    startSerialListening();
+}
+ 
+//program entry point
+E.on('init', function() {
+    initialize();
 });
