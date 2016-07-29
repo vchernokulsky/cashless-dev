@@ -7,7 +7,7 @@ var PN532 = function(connect) {
   this._i2c = connect.i2c;
 
   this._packetBuffer = new Uint8Array(48);
-  this._packetBuffer_ = new Uint8Array(64);
+  this._classicPacketBuffer = new Uint8Array(64);
   this._imWaitingFor = new Array();
   this._maxPage = 48;
 
@@ -19,11 +19,13 @@ var PN532 = function(connect) {
   this._COMMAND_SAMCONFIGURATION = 0x14;
   this._COMMAND_INLISTPASSIVETARGET = 0x4A;
   this._COMMAND_INDATAEXCHANGE = 0x40;
-  this._COMMAND_INDATAEXCHANGE_ = 0x41;
   this._SPI_DATAWRITE = 0x01;
   this._SPI_DATAREAD = 0x03;
   this._MIFARE_ULTRALIGHT_CMD_WRITE = 0xA2;
 
+  this._MIFARE_CMD_AUTH_A = 0x60;
+  this._MIFARE_CMD_AUTH_B = 0x61;  
+  
   this._MIFARE_CMD_READ = 0x30;
   this._PN532_I2C_ADDRESS = 0x48 >> 1;
 };
@@ -49,7 +51,7 @@ PN532.prototype._handleIrq = function(e) {
 PN532.prototype._sendCommandCheckAck = function(cmd, cmdlen) {
   cmdlen++;
   var toSend = [
-    this._SPI_DATAWRITE,
+    //this._SPI_DATAWRITE,
     this._PREAMBLE,
     this._PREAMBLE,
     this._STARTCODE2,
@@ -68,9 +70,11 @@ PN532.prototype._sendCommandCheckAck = function(cmd, cmdlen) {
   toSend.push(~checksum[0]);
   toSend.push(this._POSTAMBLE);
 
+  console.log('CMD: ' + this._getHexStr(cmd));
   var send = new Uint8Array(toSend, 0, 9 + cmdlen);
+  console.log(" --> " + this._getHexStr(send));
+  
   this._i2c.writeTo(this._PN532_I2C_ADDRESS, send);
-
   this._imWaitingFor.push(this._readACK.bind(this));
 };
 
@@ -98,7 +102,9 @@ PN532.prototype.listen = function() {
 };
 
 PN532.prototype._listenACK = function() {
+  console.log('Reading listening answer...');
   this._packetBuffer = this._read(20);
+  console.log('Listening answer read');  
   if (this._packetBuffer[8] !== 1) {
     this.emit('tag', {success: false});
     return;
@@ -113,74 +119,72 @@ PN532.prototype._listenACK = function() {
   this.emit('tag', false, {uid: uid, ATQA: ATQA});
 };
 
-PN532.prototype.authenticateBlock = function(uid, blockNumber, keyData, callback) {
-  // Prepare the authentication command //
-  this._packetBuffer_[0] = this._COMMAND_INDATAEXCHANGE_;   /* Data Exchange Header */
-  this._packetBuffer_[1] = 1;                              /* Max card numbers */
-  this._packetBuffer_[2] = 0;
-  this._packetBuffer_[3] = blockNumber;                    /* Block Number (1K = 0..63, 4K = 0..255 */
-  
-  for(var i = 0; i < keyData.length; i++){
-    this._packetBuffer_[4+i] = keyData[i];
+PN532.prototype._getHexStr = function (data) {
+  var str = '';
+  for(var i=0; i<data.length; i++) {
+    str += ('0x' + data[i].toString(16) + ' ');
   }
-  
-  for (var i = 0; i < uid.length; i++)
-  {
-    this._packetBuffer_[10+i] = uid[i];                /* 4 byte card ID */
-  }
+  return str;
+}
 
-  console.log(this._packetBuffer_);
+PN532.prototype.authBlock = function(uid, blockNumber, keyNumber, keyData, callback) {
+  // Prepare the authentication command //
+  this._classicPacketBuffer[0] = this._COMMAND_INDATAEXCHANGE;   /* Data Exchange Header */
+  this._classicPacketBuffer[1] = 1;                              /* Max card numbers */
+  this._classicPacketBuffer[2] = (keyNumber) ? this._MIFARE_CMD_AUTH_B : this._MIFARE_CMD_AUTH_A;
+  this._classicPacketBuffer[3] = blockNumber;                    /* Block Number (1K = 0..63, 4K = 0..255 */
   
-  /* Send the command */
-  this._sendCommandCheckAck(this._packetBuffer_, 10+uid.length);
+  console.log('authBlock UID: ' + this._getHexStr(uid));
+  
+  for(var i = 0; i < keyData.length; i++) {
+    this._classicPacketBuffer[4+i] = keyData[i];
+  }
+  
+  for (var i = 0; i < uid.length; i++) {
+    this._classicPacketBuffer[10+i] = uid[i];                /* 4 byte card ID */
+  }
+  
+  this._sendCommandCheckAck(this._classicPacketBuffer, 10+uid.length);
   this._imWaitingFor.push(this._readAuthAck.bind(this, callback));  
 }
 
 PN532.prototype._readAuthAck = function(callback) {
   var error = true;
-  this._packetBuffer_ = this._read(12);
-  console.log(this._packetBuffer_);
-  
+  this._classicPacketBuffer = this._read(12);  
   // check if the response is valid and we are authenticated???
   // for an auth success it should be bytes 5-7: 0xD5 0x41 0x00
   // Mifare auth error is technically byte 7: 0x14 but anything other and 0x00 is not good
-  if (this._packetBuffer_[8] !== 0x00) {
+  if (this._classicPacketBuffer[8] !== 0x00) {
     if (callback !== undefined) {
-      callback(error);
+      callback(error, this._classicPacketBuffer);
     }
     return;
   }
-  /* authenticate ok  */
-  callback(!error);
+  callback(!error, this._classicPacketBuffer);
 }
 
 PN532.prototype.readBlock = function(blockNumber, callback) {
   /* Prepare the command  */
-  this._packetBuffer_[0] = this._COMMAND_INDATAEXCHANGE_;
-  this._packetBuffer_[1] = 1;                      	/* Card number */
-  this._packetBuffer_[2] = this.MIFARE_CMD_READ;         /* Mifare Read command = 0x30 */
-  this._packetBuffer_[3] = blockNumber;            	/* Block Number (0..63 for 1K, 0..255 for 4K) */  
+  this._classicPacketBuffer[0] = this._COMMAND_INDATAEXCHANGE;
+  this._classicPacketBuffer[1] = 1;                      	/* Card number */
+  this._classicPacketBuffer[2] = this._MIFARE_CMD_READ;         /* Mifare Read command = 0x30 */
+  this._classicPacketBuffer[3] = blockNumber;            	/* Block Number (0..63 for 1K, 0..255 for 4K) */  
   /* Send the command */
-  this._sendCommandCheckAck(this._packetBuffer_, 4);
+  this._sendCommandCheckAck(this._classicPacketBuffer, 4);
   this._imWaitingFor.push(this._readBlockAck.bind(this, callback));
 };
 
 PN532.prototype._readBlockAck = function(callback) {
   var error = true;
-  /* Read the response packet */
-  var buffer_ = this._read(26);
-  /* If byte 8 isn't 0x00 we probably have an error */
-  //  if (this._packetBuffer[8] !== 0x00) {
-  if (buffer_[8] !== 0x00) {
+  this._classicPacketBuffer = this._read(26);
+
+  if (this._classicPacketBuffer[8] !== 0x00) {
     if (callback !== undefined) {
-      callback(false);
+      callback(error, this._classicPacketBuffer);
     }
     return;
   }
-  /* Copy the 16 data bytes to the output buffer        */
-  /* Block content starts at byte 9 of a valid response */
-  var buffer = buffer_.slice(9, 25);
-  /* Display data for debug if requested */
+  var buffer = this._classicPacketBuffer.slice(9, 25);
   callback(!error, buffer);
 };
 
@@ -249,7 +253,9 @@ PN532.prototype._read = function(length) {
 };
 
 PN532.prototype._readACK = function() {
+  console.log('Reading ACK...');
   var ackBuff = this._read(6);
+  console.log('ACK was read');  
   var pn532ack = new Uint8Array([0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00]);
   return pn532ack === ackBuff;
 };
