@@ -71,6 +71,7 @@ PN532.prototype._sendCommandCheckAck = function(cmd, cmdlen) {
   toSend.push(this._POSTAMBLE);
 
   console.log('CMD: ' + this._getHexStr(cmd));
+  console.log('CMD LEN: ' + cmdlen.toString(10));
   var send = new Uint8Array(toSend, 0, 9 + cmdlen);
   console.log(" --> " + this._getHexStr(send));
   
@@ -150,17 +151,18 @@ PN532.prototype.authBlock = function(uid, blockNumber, keyNumber, keyData, callb
 
 PN532.prototype._readAuthAck = function(callback) {
   var error = true;
-  this._classicPacketBuffer = this._read(12);  
+  var buffer = [];
+  buffer = this._read(12);  
   // check if the response is valid and we are authenticated???
   // for an auth success it should be bytes 5-7: 0xD5 0x41 0x00
   // Mifare auth error is technically byte 7: 0x14 but anything other and 0x00 is not good
-  if (this._classicPacketBuffer[8] !== 0x00) {
+  if (buffer[8] !== 0x00) {
     if (callback !== undefined) {
-      callback(error, this._classicPacketBuffer);
+      callback(error, buffer);
     }
     return;
   }
-  callback(!error, this._classicPacketBuffer);
+  callback(!error, buffer);
 }
 
 PN532.prototype.readBlock = function(blockNumber, callback) {
