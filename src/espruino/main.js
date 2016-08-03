@@ -6,16 +6,14 @@ var isVendDone = true;
 var chip = "";
 
 // WIFI configuration
-//var ssid = "neiron";
-//var pass = "msp430f2013";
+var ssid = "neiron";
+var pass = "msp430f2013";
 
 //var ssid = "service";
 //var pass = "921249514821";
 
-var ssid = "VendexFree";
-var pass = "vendex2016";
-
-
+//var ssid = "VendexFree";
+//var pass = "vendex2016";
 
 // function setupEthernet (){
   // // setup ethernet module
@@ -24,6 +22,7 @@ var pass = "vendex2016";
   // //eth.setIP();
   // eth.setIP({ip: "172.18.29.54", subnet: "255.255.224.0", gateway: "172.18.0.1", dns: "172.18.0.1"});
 // }
+
 
 // REST: GetState error responses
 var ERR_CHIP_NUM = "ErrInvalidChipNum";
@@ -63,10 +62,10 @@ function getBalance(chipUid) {
       Serial4.write(balance + "\n");
       
       //TODO: remove for real working
-      setTimeout(function(){
-        console.log("VEND FOR: 30RUB");
-        processTransportLayerCmd("PRICE:3000"); //VEND for 30RUB
-      }, 2000);
+      // setTimeout(function(){
+        // console.log("VEND FOR: 30RUB");
+        // processTransportLayerCmd("PRICE:3000"); //VEND for 30RUB
+      // }, 2000);
     });
   }).end(content);
 }
