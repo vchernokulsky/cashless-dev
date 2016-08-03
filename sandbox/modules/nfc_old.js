@@ -7,7 +7,6 @@ var PN532 = function(connect) {
   this._i2c = connect.i2c;
 
   this._packetBuffer = new Uint8Array(48);
-  this._classicPacketBuffer = new Uint8Array(64);
   this._imWaitingFor = new Array();
   this._maxPage = 48;
 
@@ -22,10 +21,6 @@ var PN532 = function(connect) {
   this._SPI_DATAWRITE = 0x01;
   this._SPI_DATAREAD = 0x03;
   this._MIFARE_ULTRALIGHT_CMD_WRITE = 0xA2;
-
-  this._MIFARE_CMD_AUTH_A = 0x60;
-  this._MIFARE_CMD_AUTH_B = 0x61;  
-  
   this._MIFARE_CMD_READ = 0x30;
   this._PN532_I2C_ADDRESS = 0x48 >> 1;
 };
@@ -51,7 +46,7 @@ PN532.prototype._handleIrq = function(e) {
 PN532.prototype._sendCommandCheckAck = function(cmd, cmdlen) {
   cmdlen++;
   var toSend = [
-    //this._SPI_DATAWRITE,
+    this._SPI_DATAWRITE,
     this._PREAMBLE,
     this._PREAMBLE,
     this._STARTCODE2,
@@ -71,8 +66,8 @@ PN532.prototype._sendCommandCheckAck = function(cmd, cmdlen) {
   toSend.push(this._POSTAMBLE);
 
   var send = new Uint8Array(toSend, 0, 9 + cmdlen);
-  
   this._i2c.writeTo(this._PN532_I2C_ADDRESS, send);
+
   this._imWaitingFor.push(this._readACK.bind(this));
 };
 
@@ -113,74 +108,6 @@ PN532.prototype._listenACK = function() {
     uid[i] = this._packetBuffer[14+i];
   }
   this.emit('tag', false, {uid: uid, ATQA: ATQA});
-};
-
-PN532.prototype._getHexStr = function (data) {
-  var str = '';
-  for(var i=0; i<data.length; i++) {
-    str += ('0x' + data[i].toString(16) + ' ');
-  }
-  return str;
-}
-
-PN532.prototype.authBlock = function(uid, blockNumber, keyNumber, keyData, callback) {
-  // Prepare the authentication command //
-  this._classicPacketBuffer[0] = this._COMMAND_INDATAEXCHANGE;   /* Data Exchange Header */
-  this._classicPacketBuffer[1] = 1;                              /* Max card numbers */
-  this._classicPacketBuffer[2] = (keyNumber) ? this._MIFARE_CMD_AUTH_B : this._MIFARE_CMD_AUTH_A;
-  this._classicPacketBuffer[3] = blockNumber;                    /* Block Number (1K = 0..63, 4K = 0..255 */
-    
-  for(var i = 0; i < keyData.length; i++) {
-    this._classicPacketBuffer[4+i] = keyData[i];
-  }
-  
-  for (var i = 0; i < uid.length; i++) {
-    this._classicPacketBuffer[10+i] = uid[i];                /* 4 byte card ID */
-  }
-  
-  this._sendCommandCheckAck(this._classicPacketBuffer, 10+uid.length);
-  this._imWaitingFor.push(this._readAuthAck.bind(this, callback));  
-}
-
-PN532.prototype._readAuthAck = function(callback) {
-  var error = true;
-  var buffer = [];
-  buffer = this._read(12);  
-  // check if the response is valid and we are authenticated???
-  // for an auth success it should be bytes 5-7: 0xD5 0x41 0x00
-  // Mifare auth error is technically byte 7: 0x14 but anything other and 0x00 is not good
-  if (buffer[8] !== 0x00) {
-    if (callback !== undefined) {
-      callback(error, buffer);
-    }
-    return;
-  }
-  callback(!error, buffer);
-}
-
-PN532.prototype.readBlock = function(blockNumber, callback) {
-  /* Prepare the command  */
-  this._classicPacketBuffer[0] = this._COMMAND_INDATAEXCHANGE;
-  this._classicPacketBuffer[1] = 1;                      	/* Card number */
-  this._classicPacketBuffer[2] = this._MIFARE_CMD_READ;         /* Mifare Read command = 0x30 */
-  this._classicPacketBuffer[3] = blockNumber;            	/* Block Number (0..63 for 1K, 0..255 for 4K) */  
-  /* Send the command */
-  this._sendCommandCheckAck(this._classicPacketBuffer, 4);
-  this._imWaitingFor.push(this._readBlockAck.bind(this, callback));
-};
-
-PN532.prototype._readBlockAck = function(callback) {
-  var error = true;
-  this._classicPacketBuffer = this._read(26);
-
-  if (this._classicPacketBuffer[8] !== 0x00) {
-    if (callback !== undefined) {
-      callback(error, this._classicPacketBuffer);
-    }
-    return;
-  }
-  var buffer = this._classicPacketBuffer.slice(9, 25);
-  callback(!error, buffer);
 };
 
 PN532.prototype.readPage = function(page, callback) {
