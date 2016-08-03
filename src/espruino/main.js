@@ -1,15 +1,21 @@
 var balance = "";
 var curr_balance = "";
 var bin_curr_balance = "";
-var isPowerUp = false;
+var isPowerUp = true;
 var isVendDone = true;
 var chip = "";
 
 // WIFI configuration
 //var ssid = "neiron";
 //var pass = "msp430f2013";
-var ssid = "service";
-var pass = "921249514821";
+
+//var ssid = "service";
+//var pass = "921249514821";
+
+var ssid = "VendexFree";
+var pass = "vendex2016";
+
+
 
 // function setupEthernet (){
   // // setup ethernet module
@@ -19,12 +25,17 @@ var pass = "921249514821";
   // eth.setIP({ip: "172.18.29.54", subnet: "255.255.224.0", gateway: "172.18.0.1", dns: "172.18.0.1"});
 // }
 
-// serial for MDB transport communication
-Serial4.setup(115200);
+// REST: GetState error responses
+var ERR_CHIP_NUM = "ErrInvalidChipNum";
+var ERR_UNEXPECTED_RESULT = "ErrInvalidResult";
+var ERR_DEV_NAME = "ErrInvalidDeviceName";
+var ERR_DEV_NOT_FOUND = "ErrDeviceOrClubNotFound";
+var ERR_CHIP_NOT_FOUND = "ErrChipNotFound";
+var ERR_CHIP_NOT_REG = "ErrChipNotRegistered";
 function getBalance(chipUid) {
   balance = "";
   //TODO: read chip id from RFID
-  var content = "chip=011000000168435012";
+  var content = "chip="+chipUid;
   var options = {
 	host: 'sync.sportlifeclub.ru',
 	port: '60080',
@@ -50,16 +61,23 @@ function getBalance(chipUid) {
       console.log("Response: " + balance);
       // send balance to MDB transport
       Serial4.write(balance + "\n");
+      
+      //TODO: remove for real working
+      setTimeout(function(){
+        console.log("VEND FOR: 30RUB");
+        processTransportLayerCmd("PRICE:3000"); //VEND for 30RUB
+      }, 2000);
     });
   }).end(content);
 }
 
+// REST: WriteOff error responses
 function setBalance(chip, srvid, price) {
-  var content = "chip=" + chip + "&srvid=" + srvid + "&price=" + price;
+  var content = "dev=1" + "&chip=" + chip + "&srvid=" + srvid + "&price=" + price;
   var options = {
 	host: 'sync.sportlifeclub.ru',
 	port: '60080',
-    path: '/slsrv/clients/writeoff',
+    path: '/slsrv/chip/writeoff',
     protocol: "http:",
     method: "POST",
     headers: {
@@ -90,14 +108,13 @@ function processTransportLayerCmd(cmd) {
     switch(prefix) {
       case 'PWRUP':          //PWRUP
         isPowerUp = true;
-        isVendDone = true;        
+        isVendDone = true;
         console.log('PWRUP recieved');
         break;
       case 'PRICE':          //PRICE:<VALUE>
         srvid = 8633;
         price = (cmd.split(':'))[1];
         //TODO: set balance to SportLife server
-        var chip = "011000000168435012";
         setBalance(chip, srvid, price);
         setTimeout(function(){
             isVendDone = true;
@@ -116,6 +133,8 @@ function processTransportLayerCmd(cmd) {
 
 var nfc = null;
 function initPeripherial() {
+    // setup serial for MDB transport communication
+    Serial4.setup(115200);
     // setup RFID module
     I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
     nfc = require("nfc").connect({i2c: I2C1, irqPin: P9});
@@ -150,6 +169,42 @@ function initPeripherial() {
     });
 }
 
+// mifare constants
+var MIFARE_AUTH_TYPE = 0;
+var RFID_BLOCK_NUM = 4;
+var RFID_KEY = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
+function readChipIdFromRFID(uid, keyData, block, callback) {
+  var result = "error";
+  nfc.authBlock(uid, block, MIFARE_AUTH_TYPE, keyData, function(error, msg) {
+    if(error) {
+      console.log('MSG: ' + msg);
+      console.log('Block auth error');
+    }
+    else {
+      nfc.readBlock(block, function(error, data){
+        if(error) {
+          console.log('Block read error');
+          console.log('MSG: ' + data);
+        } else {
+          //console.log('Block #' + block + ' data: ' + data);
+          result = '';
+          for(var i=0; i<data.length; i++) {
+            ch1 = data[i].toString(16);
+            ch2 = ch1.length > 1 ? ch1 : '0'+ch1;
+            result += ch2;
+          }
+          chip = result;
+          console.log('DATA: ' + result);
+        }
+        // try to get balance from server
+        if (typeof callback === 'function') {
+          callback(chip);
+        }
+      });
+    }
+  });
+}
+
 function startRFIDListening() {
 // обработка взаимодействия с RFID меткой
     nfc.on('tag', function(error, data) {
@@ -157,12 +212,10 @@ function startRFIDListening() {
         print('tag read error');
       } else {
         console.log('RFID touched');
-        //setBalance("011000000168435012", "8633", "1000");        
         //TODO: convert UID to correct chipid
         if (isPowerUp & isVendDone){
-            console.log(data);    // UID и ATQA        
-            chip = data.uid;
-            getBalance(data.uid);
+            console.log(data);    // UID и ATQA
+            readChipIdFromRFID(data.uid, RFID_KEY, RFID_BLOCK_NUM, getBalance);
             if (balance.length > 0) {
                 isVendDone = false; // rfid processing...
             } else {
@@ -198,8 +251,9 @@ function initialize() {
     startRFIDListening();
     startSerialListening();
 }
- 
+
+initialize();
 //program entry point
-E.on('init', function() {
-    initialize();
-});
+//E.on('init', function() {
+//    initialize();
+//});
