@@ -12,16 +12,16 @@ setWatch(function(){
     }
     switch (count){
         case 1: // POWERUP
-            Serial4.write('POWERUP:00000000');
+            Serial4.write('PWRUP:00000000');
             console.log('SEND: POWERUP');
             break;
         case 2: // __PRICE
-            Serial4.write('__PRICE:00001000');
-            console.log('SEND: __PRICE');
+            Serial4.write('PRICE:00001000');
+            console.log('SEND: PRICE');
             break;
         case 3: // __RESET
-            Serial4.write('__RESET:00000000');
-            console.log('SEND: __RESET');
+            Serial4.write('RESET:00000000');
+            console.log('SEND: RESET');
             count = 0;
             break;
     }
