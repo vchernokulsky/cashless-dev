@@ -143,7 +143,7 @@ void process_disabled(unsigned char* data){
 			} else {
 				fill_mbd_command(&resp, resp_ack, 1);
 				send_mdb_command(&resp);
-				log("(DISABLED)|RECV:POLL ; SEND: ACK\n");
+				log("(DISABLED)|RECV:POLL; SEND: ACK\n");
 			}
 		break;
 		case READER:
@@ -163,7 +163,7 @@ void process_disabled(unsigned char* data){
 					log("(DISABLED)|RECV:READER [reader disable]; SEND: ACK\n");
 				break;
 				case 0x02: // Reader Cancel
-					fill_mbd_command(&delay_cmd,resp_cmd_out_of_sequence,2);
+					fill_mbd_command(&delay_cmd,resp_cmd_out_of_sequence, 2);
 				break;
 			}
 		break;
@@ -171,8 +171,8 @@ void process_disabled(unsigned char* data){
 			if (subCmdId == 0x00) { // EXPANSION ID REQUEST 
 				fill_mbd_command(&resp, resp_ack, 1);
 				send_mdb_command(&resp);
-				log("(DISABLED)|RECV:EXPANSION ; SEND: ACK\n");
-				fill_mbd_command(&delay_cmd,pesn_expansion_id_request,4);
+				log("(DISABLED)|RECV:EXPANSION [id request]; SEND: ACK\n");
+				fill_mbd_command(&delay_cmd, pesn_expansion_id_request, 4);
 			}
 		break;
 		default:

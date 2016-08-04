@@ -22,6 +22,8 @@ void main(void)
 	unsigned char  byte  = 0x00;
 	initialize_board();
 
+	send_to_espruino("BOARD STARTED\n", 14);
+
 	// initialize cashless
 	CashlessProtocoInit(USART1_Send);
 
