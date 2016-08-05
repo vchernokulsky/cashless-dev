@@ -1,27 +1,23 @@
 var balance = "";
 var curr_balance = "";
 var bin_curr_balance = "";
-var isPowerUp = true;
+var isPowerUp = false;
 var isVendDone = true;
+isSessionTimeout = false;
 var chip = "";
 
 // WIFI configuration
-var ssid = "neiron";
-var pass = "msp430f2013";
+//var ssid = "neiron";
+//var pass = "msp430f2013";
 
-//var ssid = "service";
-//var pass = "921249514821";
+var ssid = "service";
+var pass = "921249514821";
 
 //var ssid = "VendexFree";
 //var pass = "vendex2016";
 
-// function setupEthernet (){
-  // // setup ethernet module
-  // SPI2.setup({ mosi:B15, miso:B14, sck:B13 });
-  // eth = require("WIZnet").connect(SPI2, B10);
-  // //eth.setIP();
-  // eth.setIP({ip: "172.18.29.54", subnet: "255.255.224.0", gateway: "172.18.0.1", dns: "172.18.0.1"});
-// }
+// var ssid = "SauronAP";
+// var pass = "yuwb3795";
 
 
 // REST: GetState error responses
@@ -33,6 +29,7 @@ var ERR_CHIP_NOT_FOUND = "ErrChipNotFound";
 var ERR_CHIP_NOT_REG = "ErrChipNotRegistered";
 function getBalance(chipUid) {
   balance = "";
+  var numBalance = 0;
   //TODO: read chip id from RFID
   var content = "chip="+chipUid;
   var options = {
@@ -56,11 +53,24 @@ function getBalance(chipUid) {
       balance += data;
     });
     res.on('close',function(data) {
-      console.log("Server connection closed, " + nRecv + " bytes received.");  
+      console.log("Server connection closed, " + nRecv + " bytes received.");
       console.log("Response: " + balance);
       // send balance to MDB transport
-      Serial4.write(balance + "\n");
-      
+      numBalance = parseInt(balance, 10);
+      if(!isNaN(numBalance)) {
+        if((numBalance/100) > 30) {
+          //Serial4.write(balance + "\n");
+          Serial4.write("3000\n");
+          isSessionTimeout = true;
+          setTimeout(function(){
+            if(isSessionTimeout) {
+                console.log("SESSION TIMED OUT");
+                isVendDone = true;
+                isSessionTimeout = false;
+            }
+          }, 40000);
+        }
+      }
       //TODO: remove for real working
       // setTimeout(function(){
         // console.log("VEND FOR: 30RUB");
@@ -115,9 +125,8 @@ function processTransportLayerCmd(cmd) {
         price = (cmd.split(':'))[1];
         //TODO: set balance to SportLife server
         setBalance(chip, srvid, price);
-        setTimeout(function(){
-            isVendDone = true;
-        }, 30000);
+        isVendDone = true;
+        isSessionTimeout = false;
         console.log('PRICE recieved: ' + parseInt(price, 10)/100);
         break;
       case 'RESET':          //RESET
@@ -166,6 +175,15 @@ function initPeripherial() {
           });
       }
     });
+    // setup ethernet module
+   // digitalWrite(B11, 0);
+   // setTimeout(function(){
+       // digitalWrite(B11, 1);
+       // SPI2.setup({ mosi:B15, miso:B14, sck:B13 });
+       // eth = require("WIZnet").connect(SPI2, B12);   
+       // // eth.setIP();
+       // eth.setIP({ip: "192.168.1.110", subnet: "255.255.255.0", gateway: "192.168.1.1", dns: "8.8.8.8"});   
+   // }, 1);
 }
 
 // mifare constants
