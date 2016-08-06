@@ -225,14 +225,16 @@ void process_enabled(unsigned char* data){
 				fill_mbd_command(&delay_cmd, resp_display, 34);
 				fill_mbd_command(&resp, resp_ack, 1);
 				send_mdb_command(&resp);
-				log("(ENABLED)|RECV:READER[READER DISABLE] ; SEND: ACK\n");
+				log("(ENABLED)|RECV:READER[READER DISABLE]; SEND: ACK\n");
 				break;
 			case 0x01: // reader enable
-				log("(ENABLED)|RECV:READER ; SEND: ACK (READER ENABLE)\n");
+				fill_mbd_command(&resp, resp_ack, 1);
+				send_mdb_command(&resp);
+				log("(ENABLED)|RECV:READER[READER ENABLE]; SEND: ACK\n");
 				break;
 			case 0x02: // reader cancel
 				// TODO: send 0x08 - canceled
-				log("(ENABLED)|RECV:READER ; SEND: ACK (READER CANCEL)\n");
+				log("(ENABLED)|RECV:READER[READER CANCEL]; SEND: ACK\n");
 				break;
 			}
 			break;
