@@ -58,24 +58,23 @@ function getBalance(chipUid) {
       // send balance to MDB transport
       numBalance = parseInt(balance, 10);
       if(!isNaN(numBalance)) {
-        if((numBalance/100) > 30) {
-          //Serial4.write(balance + "\n");
-          Serial4.write("3000\n");
-          isSessionTimeout = true;
+        if((numBalance/100) > 30) { //user can start vend operation
+          isVendDone = false;       //vend session started
+          Serial4.write("3000\n");  //fixed balance for SportLife (30RUB)
+          console.log("Send 30RUB to nucleo");
+          // start timer for VEND session
+          isSessionTimeout = true;          
           setTimeout(function(){
             if(isSessionTimeout) {
                 console.log("SESSION TIMED OUT");
-                isVendDone = true;
+                isVendDone = true;   //vend session closed
                 isSessionTimeout = false;
             }
           }, 40000);
         }
+      } else {
+        console.log("Recieved incorrect data");
       }
-      //TODO: remove for real working
-      // setTimeout(function(){
-        // console.log("VEND FOR: 30RUB");
-        // processTransportLayerCmd("PRICE:3000"); //VEND for 30RUB
-      // }, 2000);
     });
   }).end(content);
 }
@@ -144,6 +143,7 @@ function initPeripherial() {
     // setup serial for MDB transport communication
     Serial4.setup(115200);
     // setup RFID module
+
     I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
     nfc = require("nfc").connect({i2c: I2C1, irqPin: P9});
     nfc.wakeUp(function(error) {
@@ -155,7 +155,9 @@ function initPeripherial() {
         nfc.listen();
       }
     });
+    
     // setup WiFi module
+    /*
     Serial2.setup(115200, { rx: A3, tx : A2 });
     var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
       if (err) {
@@ -174,16 +176,16 @@ function initPeripherial() {
             });
           });
       }
-    });
+    }); */
+    
     // setup ethernet module
-   // digitalWrite(B11, 0);
-   // setTimeout(function(){
-       // digitalWrite(B11, 1);
-       // SPI2.setup({ mosi:B15, miso:B14, sck:B13 });
-       // eth = require("WIZnet").connect(SPI2, B12);   
-       // // eth.setIP();
-       // eth.setIP({ip: "192.168.1.110", subnet: "255.255.255.0", gateway: "192.168.1.1", dns: "8.8.8.8"});   
-   // }, 1);
+    console.log("Setup ethernet module");
+    SPI2.setup({mosi:B15, miso:B14, sck:B13});
+    eth = require("WIZnet").connect(SPI2, P10);   
+    eth.setIP();
+    //eth.setIP({ip: "192.168.1.110", subnet: "255.255.255.0", gateway: "192.168.1.1", dns: "8.8.8.8"});       
+    var addr = eth.getIP();
+    console.log(addr);
 }
 
 // mifare constants
@@ -198,7 +200,7 @@ function readChipIdFromRFID(uid, keyData, block, callback) {
       console.log('Block auth error');
     }
     else {
-      nfc.readBlock(block, function(error, data){
+      nfc.readBlock(block, function(error, data) {
         if(error) {
           console.log('Block read error');
           console.log('MSG: ' + data);
@@ -233,11 +235,11 @@ function startRFIDListening() {
         if (isPowerUp & isVendDone){
             console.log(data);    // UID и ATQA
             readChipIdFromRFID(data.uid, RFID_KEY, RFID_BLOCK_NUM, getBalance);
-            if (balance.length > 0) {
-                isVendDone = false; // rfid processing...
-            } else {
-                console.log("Balance IS NOT available");
-            }
+            // if (balance.length > 0) {
+                // isVendDone = false; // rfid processing...
+            // } else {
+                // console.log("Balance IS NOT available");
+            // }
         }
         setTimeout(function () {
           nfc.listen();
@@ -263,14 +265,12 @@ function startSerialListening() {
     }, 5);
 }
 
-function initialize() {
+// initPeripherial();
+// startRFIDListening();
+// startSerialListening();
+
+E.on('init', function() {
     initPeripherial();
     startRFIDListening();
     startSerialListening();
-}
-
-initialize();
-//program entry point
-//E.on('init', function() {
-//    initialize();
-//});
+});
