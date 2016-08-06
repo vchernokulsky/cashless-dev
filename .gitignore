@@ -34,3 +34,4 @@ src/VSproj/MDBAdapter/MDBAdapter/Debug/
 src/VSproj/MDBAdapter/MDBAdapter.sdf
 doc/pn532_datasheet.pdf
 src/mic/MDBAdapter/MDBAdapter/Debug/
+src/espruino/balance_checker.js
