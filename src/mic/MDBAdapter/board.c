@@ -258,7 +258,7 @@ int get_user_balance() {
 	int val = 0;
 	char sBalance[RX_BUFF_LENGH];
 
-	DMA_Cmd(DMA_USART2_Rx_Channel,DISABLE);
+	DMA_Cmd(DMA_USART2_Rx_Channel, DISABLE);
 	memset(sBalance, 0x00, RX_BUFF_LENGH);
 	for(i=last_dma_buff_idx % (RX_BUFF_LENGH-1), k=0; i<RX_BUFF_LENGH; i++, k++) {
 		if(rx_buf[i] != '\n') {
@@ -276,6 +276,40 @@ int get_user_balance() {
 	}
 	DMA_Cmd(DMA_USART2_Rx_Channel,ENABLE);
 	val = atoi(sBalance);
+	return val;
+}
+
+int get_espruino_started() {
+	int i = 0, k = 0;
+	int val = 0;
+	char sCmd[16];
+
+	DMA_Cmd(DMA_USART2_Rx_Channel, DISABLE);
+	memset(sCmd, 0x00, 16);
+	for(i=last_dma_buff_idx % (RX_BUFF_LENGH-1), k=0; i<RX_BUFF_LENGH; i++, k++) {
+		if(rx_buf[i] != 0x00) {  // ASCII char can't be 0
+			if((rx_buf[i] != '\n')&&(k < 16)) {
+				sCmd[k] = rx_buf[i];
+				//FIXME: Part of command can be removed
+				rx_buf[i] = 0x00;
+			}
+			else { // End of command found
+				//TODO: clear all previous data
+				rx_buf[i] = 0x00;
+				last_dma_buff_idx = i+1;
+				if(strlen(sCmd) == 5) {
+					if(strcmp(sCmd, "READY") == 0) {
+						val = 1; //
+					}
+				}
+			}
+		}
+		else {
+			// No data from Espruino board
+			break;
+		}
+	}
+	DMA_Cmd(DMA_USART2_Rx_Channel, ENABLE);
 	return val;
 }
 
