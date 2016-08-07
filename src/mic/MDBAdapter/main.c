@@ -29,7 +29,6 @@ void main(void)
 //	delay_ms(250);
 	send_to_espruino("MDB BOARD STARTED\n\0", 15);
 
-
 	// main loop for MDB commands processing
 	while(1)
 	{
