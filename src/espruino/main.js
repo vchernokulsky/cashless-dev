@@ -127,7 +127,7 @@ function processTransportLayerCmd(cmd) {
         logger('PWRUP recieved');
         //LED notification
         LED1.set();
-        setTimeout(function(){LED1.reset()}, 3000);
+        setTimeout(function(){LED1.reset();}, 3000);
         break;
       case 'PRICE':          //PRICE:<VALUE>
         srvid = 8633;
@@ -149,20 +149,26 @@ function processTransportLayerCmd(cmd) {
     }
 }
 
+function resetNucleo() {
+}
+
 var nfc = null;
 function initPeripherial() {
-    // setup serial for MDB transport communication
-    Serial4.setup(115200);
+    // init nucleo state
+    P0.reset();
+    
+    Serial2.setup(115200);   //logger serial port    
+    Serial4.setup(115200);   //MDB transport serial port
+    
     // setup RFID module
-
     I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
     nfc = require("nfc").connect({i2c: I2C1, irqPin: P9});
     nfc.wakeUp(function(error) {
       if (error) {
-        print('RFID wake up error', error);
+        logger('RFID wake up error', error);
       } else {
-        print('RFID wake up OK');
-        // слушаем новые метки
+        logger('RFID wake up OK');
+        P0.set();
         nfc.listen();
       }
     });
@@ -194,9 +200,8 @@ function initPeripherial() {
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, P10);   
     eth.setIP();
-    //eth.setIP({ip: "192.168.1.110", subnet: "255.255.255.0", gateway: "192.168.1.1", dns: "8.8.8.8"});       
     var addr = eth.getIP();
-    logger(addr);
+    logger(addr.toString());
 }
 
 // mifare constants
@@ -239,18 +244,13 @@ function startRFIDListening() {
 // обработка взаимодействия с RFID меткой
     nfc.on('tag', function(error, data) {
       if (error) {
-        print('tag read error');
+        logger('tag read error');
       } else {
         logger('RFID touched');
         //TODO: convert UID to correct chipid
         if (isPowerUp & isVendDone){
             logger(data);    // UID и ATQA
             readChipIdFromRFID(data.uid, RFID_KEY, RFID_BLOCK_NUM, getBalance);
-            // if (balance.length > 0) {
-                // isVendDone = false; // rfid processing...
-            // } else {
-                // logger("Balance IS NOT available");
-            // }
         }
         setTimeout(function () {
           nfc.listen();
