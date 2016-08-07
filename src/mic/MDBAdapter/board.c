@@ -47,8 +47,8 @@ void initialize_board() {
 	SystemInit();
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE);
 
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1,ENABLE);
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1,ENABLE);
+//	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1,ENABLE);
+//	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1,ENABLE);
 
 	USART_DeInit(USART1);
 	USART_DeInit(USART2);
@@ -59,6 +59,18 @@ void initialize_board() {
 
 	USART2_Init();
 	USART2_DMA_Init();
+
+	// initialize LED
+	GPIO_InitTypeDef GPIO_InitStructure;
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5; // For STM32 devboard
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+	GPIO_SetBits(GPIOA, GPIO_Pin_5);
+	GPIO_ResetBits(GPIOA, GPIO_Pin_5);
+
 	return;
 }
 ////////////////////////////////////////////////////////////////////////
@@ -72,26 +84,28 @@ void USART1_Init(void) {
 
 	USART_DeInit(USART1);
 
-	/* USARTx configured as follow:
-    - BaudRate = 9600 baud
-    - Word Length = 8 Bits
-    - One Stop Bit
-    - No parity
-    - Hardware flow control disabled (RTS and CTS signals)
-    - Receive and transmit enabled
-	 */
-	USART_InitStructure.USART_BaudRate = 9600;
-	USART_InitStructure.USART_WordLength = USART_WordLength_9b;
-	USART_InitStructure.USART_StopBits = USART_StopBits_1;
-	USART_InitStructure.USART_Parity = USART_Parity_No;
-	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
-
 	/* Enable GPIO clock */
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_GPIOA, ENABLE);
 
 	/* Enable USART clock */
 	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+
+
+	/* USARTx configured as follow:
+	- BaudRate = 9600 baud
+	- Word Length = 8 Bits
+	- One Stop Bit
+	- No parity
+	- Hardware flow control disabled (RTS and CTS signals)
+	- Receive and transmit enabled
+	 */
+	USART_InitStructure.USART_BaudRate = 9600;
+	USART_InitStructure.USART_WordLength = USART_WordLength_9b;
+//	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+	USART_InitStructure.USART_StopBits = USART_StopBits_1;
+	USART_InitStructure.USART_Parity = USART_Parity_No;
+	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
 
 
 	/* Configure USART Tx, Rx as alternate function push-pull */
@@ -199,17 +213,13 @@ void USART2_Send(uint16_t data)
 
 void USART2_Send_String(const char *str)
 {
-//	while(!(USART1->SR & USART_SR_TC)); //Проверяем установку флага TC - завершения предыдущей передачи
-//	TODO:Check the end of transmition
-//	while(USART_GetFlagStatus(USART1,USART_FLAG_TC) == RESET);
-
 	DMA_Cmd(DMA_USART2_Tx_Channel, DISABLE);
 	memset((void*)txbuf, 0, TX_BUFF_LENGH);
 	strcat((char*)txbuf, str);
 	DMA_SetCurrDataCounter(DMA_USART2_Tx_Channel, strlen((void*)txbuf));
 	DMA_Cmd(DMA_USART2_Tx_Channel, ENABLE);
 	return;
-	}
+}
 
 
 void USART2_DMA_Init(void) {
@@ -311,6 +321,15 @@ int get_espruino_started() {
 	}
 	DMA_Cmd(DMA_USART2_Rx_Channel, ENABLE);
 	return val;
+}
+
+void set_led_state(unsigned int state) {
+	if(state) {
+		GPIO_SetBits(GPIOA, GPIO_Pin_5);
+	}
+	else {
+		GPIO_ResetBits(GPIOA, GPIO_Pin_5);
+	}
 }
 
 void delay_ms(uint32_t ms)

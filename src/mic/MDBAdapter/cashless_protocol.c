@@ -200,6 +200,8 @@ void process_enabled(unsigned char* data){
 		case POLL:
 			cur_balance = read_balance();
 			if (cur_balance > 0) {  // BEGIN SESSION
+				//switch on session indicator
+				set_led_state(0x01);
 				//TODO: how we can send balance > 650RUB to VMC?
 				cur_balance = cur_balance > MAX_AMOUNT_VALUE ? MAX_AMOUNT_VALUE : cur_balance;
 				getBalanceArray(cur_balance, result);
@@ -317,7 +319,8 @@ void process_session_idle(unsigned char* data){
 					strcat(str_espr_cmd, str_item_price);
 					strcat(str_espr_cmd, "\n");
 					send_to_espruino(str_espr_cmd, strlen(str_espr_cmd));
-					//log("(IDLE)|RECV:POLL; SEND: 0x07 (END SESSION)\n");
+					//switch off session indicator
+					set_led_state(0x00);
 					// end Session => set to zero balance
 					break;
 			}
