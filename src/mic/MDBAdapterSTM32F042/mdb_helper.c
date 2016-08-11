@@ -1,12 +1,19 @@
 #include "platform.h"
-
+// common ANSI libraries
+#include <string.h>
+//
 #include "MDBConst.h"
 #include "mdb_helper.h"
-#include <string.h>
+
 #ifdef __PLATFORM_PC__
 	#include <stdio.h>
 	#include <memory.h>
 #elif defined(__PLATFORM_STM32__)
+	#include "board.h"
+#endif
+
+// define functions specified for STM32 platform
+#if defined(__PLATFORM_STM32__)
 	void (*UARTwritestream)(uint16_t Data );
 	void CashlessProtocoInit(void (*writestream)(uint16_t Data )) {
 		UARTwritestream = writestream;
@@ -130,4 +137,29 @@ void fill_mbd_command(struct Response *resp, const char* buffer, int length) {
 void clear_mdb_command(struct Response *resp) {
 	resp->length = 0;
 	memset(resp->buffer, 0x00, MAX_MSG_LENGTH);
+}
+
+int read_balance() {
+	int balance = 0;
+#if defined(__PLATFORM_PC__)
+	balance = 30;
+#elif defined(__PLATFORM_STM32__)
+	balance = get_user_balance();
+#endif
+	return balance;
+}
+
+// this fuction for send text command to espruino board
+void send_to_espruino(const char *cmd, unsigned int length) {
+#if defined(__PLATFORM_PC__)
+	unsigned int i = 0;
+	for(i=0; i<length; i++) {
+		unsigned int val = (unsigned int)cmd[i];
+		printf("0x%02x", val);
+		printf(" ");
+	}
+	printf("\n");
+#elif defined(__PLATFORM_STM32__)
+	USART2_Send_String(cmd);
+#endif
 }

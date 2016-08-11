@@ -15,3 +15,12 @@ void send_mdb_command(struct Response *data);
 void fill_mbd_command(struct Response *resp, const char* buffer, int length);
 
 void clear_mdb_command(struct Response *resp);
+
+int read_balance();
+
+#if defined(__PLATFORM_STM32__)
+void CashlessProtocoInit(void (*writestream)(uint16_t Data ));
+#endif
+
+// espruino communication layer
+void send_to_espruino(const char *cmd, unsigned int length);
