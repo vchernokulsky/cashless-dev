@@ -23,6 +23,9 @@
     <ClCompile Include="main.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\mic\MDBAdapterSTM32F042\communication.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\mic\MDBAdapter\cashless_protocol.h">
@@ -38,6 +41,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\mic\MDBAdapter\logger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\mic\MDBAdapterSTM32F042\communication.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
