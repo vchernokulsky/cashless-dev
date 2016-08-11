@@ -77,12 +77,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\mic\MDBAdapterSTM32F042\communication.c" />
     <ClCompile Include="..\..\..\mic\MDBAdapter\cashless_protocol.c" />
     <ClCompile Include="..\..\..\mic\MDBAdapter\logger.c" />
     <ClCompile Include="..\..\..\mic\MDBAdapter\mdb_helper.c" />
     <ClCompile Include="main.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\mic\MDBAdapterSTM32F042\communication.h" />
     <ClInclude Include="..\..\..\mic\MDBAdapter\cashless_protocol.h" />
     <ClInclude Include="..\..\..\mic\MDBAdapter\logger.h" />
     <ClInclude Include="..\..\..\mic\MDBAdapter\MDBConst.h" />

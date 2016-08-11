@@ -65,11 +65,11 @@ void test_single_vend_sequence() {
 	process_message(req_ack);
 }
 
+void test_cmd_parser() {
+}
 
 void main(void) {
 	int charcode;
-	int val = atoi("00015");
-	printf("%i", val);
 	//test_power_up_sequence();
 	//test_single_vend_sequence();
 	charcode = getchar();
