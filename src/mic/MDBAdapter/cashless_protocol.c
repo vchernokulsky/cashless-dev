@@ -23,13 +23,14 @@ unsigned short isSessionComplete = 0x00; // false
 
 // VENDING result variable
 unsigned short vend_result_variable = VEND_NOTHING;
+unsigned short vend_attempts_count   = 0;
 
 // for success single vend scenario
 char str_item_price[16];
 char str_espr_cmd[23];
 unsigned int item_price  = 0;
 unsigned int cur_balance = 0;
-
+unsigned short session_timeout_seconds = 20;
 
 // cashless FSM states
 unsigned int  _cashless_state = ST_INACTIVE;
@@ -200,8 +201,6 @@ void process_enabled(unsigned char* data){
 		case POLL:
 			cur_balance = read_balance();
 			if (cur_balance > 0) {  // BEGIN SESSION
-				//switch on session indicator
-				set_led_state(0x01);
 				//TODO: how we can send balance > 650RUB to VMC?
 				cur_balance = cur_balance > MAX_AMOUNT_VALUE ? MAX_AMOUNT_VALUE : cur_balance;
 				getBalanceArray(cur_balance, result);
@@ -227,16 +226,14 @@ void process_enabled(unsigned char* data){
 				fill_mbd_command(&delay_cmd, resp_display, 34);
 				fill_mbd_command(&resp, resp_ack, 1);
 				send_mdb_command(&resp);
-				log("(ENABLED)|RECV:READER[READER DISABLE]; SEND: ACK\n");
+				log("(ENABLED)|RECV:READER[READER DISABLE] ; SEND: ACK\n");
 				break;
 			case 0x01: // reader enable
-				fill_mbd_command(&resp, resp_ack, 1);
-				send_mdb_command(&resp);
-				log("(ENABLED)|RECV:READER[READER ENABLE]; SEND: ACK\n");
+				log("(ENABLED)|RECV:READER ; SEND: ACK (READER ENABLE)\n");
 				break;
 			case 0x02: // reader cancel
 				// TODO: send 0x08 - canceled
-				log("(ENABLED)|RECV:READER[READER CANCEL]; SEND: ACK\n");
+				log("(ENABLED)|RECV:READER ; SEND: ACK (READER CANCEL)\n");
 				break;
 			}
 			break;
@@ -290,6 +287,12 @@ void process_session_idle(unsigned char* data){
 		case POLL:
 			switch(vend_result_variable) {
 				case VEND_NOTHING:
+					vend_attempts_count++;
+					if(vend_attempts_count*25 > session_timeout_seconds*1000) {
+						vend_result_variable = VEND_CANCEL; //User timeout
+						vend_attempts_count = 0;
+					}
+					//waiting user selection
 					fill_mbd_command(&resp, resp_ack, 1);
 					send_mdb_command(&resp);
 					log("(IDLE)|RECV:POLL; SEND: ACK\n");
@@ -298,11 +301,13 @@ void process_session_idle(unsigned char* data){
 					// send Session Cancel
 					fill_mbd_command(&resp, resp_session_cancel, 2);
 					send_mdb_command(&resp);
-					//lastCmd = [0x04, 0x04];
 					fill_mbd_command(&last_cmd, resp_session_cancel, 2);
-					log("(IDLE)|RECV:POLL; SEND: 0x04 (SESSION CANCEL)\n");
+					//log("(IDLE)|RECV:POLL; SEND: 0x04 (SESSION CANCEL)\n");
+					send_to_espruino("RESET\n", 6);
 					// Session Cancel => set to zero balance
 					isBalanceReady = 0x00; // false
+					cur_balance = 0;
+					item_price = 0;
 					break;
 				case VEND_SUCCESS:
 					// send End Session
@@ -311,7 +316,7 @@ void process_session_idle(unsigned char* data){
 					// lastCmd = [0x07, 0x07];
 					fill_mbd_command(&last_cmd, resp_end_session, 2);
 					_cashless_state = ST_ENABLED;
-
+					// prepare Item Price to send
 					memset(str_item_price, 0x00, 16);
 					memset(str_espr_cmd, 0x00, 23);
 					itoa(item_price, str_item_price);
@@ -319,9 +324,11 @@ void process_session_idle(unsigned char* data){
 					strcat(str_espr_cmd, str_item_price);
 					strcat(str_espr_cmd, "\n");
 					send_to_espruino(str_espr_cmd, strlen(str_espr_cmd));
-					//switch off session indicator
-					set_led_state(0x00);
+					//log("(IDLE)|RECV:POLL; SEND: 0x07 (END SESSION)\n");
 					// end Session => set to zero balance
+					isBalanceReady = 0x00; // false
+					cur_balance = 0;
+					item_price = 0;
 					break;
 			}
 		break;
