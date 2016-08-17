@@ -1,14 +1,39 @@
+var balance = "";
+
+var isPowerUp = false;
+var isVendDone = true;
+var isSessionTimeout = false;
+
+// WIFI configuration
+//var ssid = "neiron";
+//var pass = "msp430f2013";
+
+//var ssid = "service";
+//var pass = "921249514821";
+
+var ssid = "VendexFree";
+var pass = "vendex2016";
+
+// var ssid = "SauronAP";
+// var pass = "yuwb3795";
+
+// ---------------------------------------------------------------
 // -- begin variables for <cmd parser>
-var PREAMBLE = 0xFD;
-var ESC = 0xFF;
+var PREAMBLE  = 0xFD;
+var ESC       = 0xFF;
 var POSTAMBLE = 0xFE;
 // parser states 
-var BEGIN_STATE = 1;
+var BEGIN_STATE  = 1;
 var ESCSUM_STATE = 2;
-var END_STATE = 3;
+var END_STATE    = 3;
+
 // default parser state
 var parser_state = BEGIN_STATE;
+
+// For GloLime server response
 var buffer = []; // _buffer = new List<byte>();  // In JS Uint8Array is equal "byte"
+
+// For bytestuffing process
 var EscSum = new Uint8Array([0xFF, 0xFE, 0xFD]);
 // -- end variables for <cmd parser>
 
@@ -21,11 +46,11 @@ var //addr,
 	crc16; // byte[] _cmdData
 // -- end variables for <GloLimeResponse>
 
-// Error Codes definitions
-var ERROR_OK = 0x00,
-   ERROR_INVALID_CRC = 0xFF,
-   ERROR_INVALID_COMMAND = 0xFE,
-   ERROR_INVALID_PARAMETER = 0xFD;
+// Error Codes definitions for GloLime response
+var ERROR_OK                = 0x00,
+    ERROR_INVALID_CRC       = 0xFF,
+    ERROR_INVALID_COMMAND   = 0xFE,
+    ERROR_INVALID_PARAMETER = 0xFD;
 
 var crcTable = [0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50a5,
 0x60c6, 0x70e7, 0x8108, 0x9129, 0xa14a, 0xb16b,
@@ -70,34 +95,39 @@ var crcTable = [0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50a5,
 0xef1f, 0xff3e, 0xcf5d, 0xdf7c, 0xaf9b, 0xbfba,
 0x8fd9, 0x9ff8, 0x6e17, 0x7e36, 0x4e55, 0x5e74,
 0x2e93, 0x3eb2, 0x0ed1, 0x1ef0];
-var initialValue = 0xffff;
-var castMask = 0xFFFF;
-var width = 16;
-var finalXorVal = 0xFFFF;
 
-var uidToSend; // for Req to GloLime
+// for CRC16_X25 calculation
+var initialValue = 0xffff;
+var castMask     = 0xFFFF;
+var width        = 16;
+var finalXorVal  = 0xFFFF;
+
+// HEX user's UID for Request to GloLime
+var uidToSend; 
+
 var gloLimeResponse = [];
 
-var ssid = "VendexFree";
-var pass = "vendex2016";
+// For communications
 var client, wifi;
 
+// userId from GloLime resp (DEC)
 var userId;
+// userId in LittleEndian format
 var userIdLittleEndian;
-var affordance;
+
+// ID product to buy (get from MDB device)
 var productId;
-var chooseCommand = 2;
 
-var isRespGetted = false;
-var isRFIDOk = false;
-var isWiFiOk = false;
+// For setting communication
+var isRespGot = false;
+var isRFIDOk  = false;
+var isWiFiOk  = false;
 
+// For setInterval to check WiFi and RFID/NFC
 var idWiFi, idRFID;
+// ---------------------------------------------------------------
 
-// настраиваем I2C1 для работы модуля
-I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
-nfc = require("nfc").connect({i2c: I2C1, irqPin: P9});
-
+// Init functions
 function nfcInit(error){
   if (error) {
       print('RFID wake up error', error);
@@ -117,6 +147,7 @@ function wifiConnect(err){
 	client = require("net");
     clearInterval(idWiFi);
     nfc.wakeUp(nfcInit);
+	// waiting for RFID wake up
     idRFID = setInterval(function () {
       if (!isRFIDOk){
         // wake up rfid
@@ -143,191 +174,81 @@ function wifiInit(err) {
     }
 }
 
-Serial2.setup(115200, { rx: A3, tx : A2 });
-wifi = require("ESP8266WiFi_0v25");
-wifi = wifi.connect(Serial2, wifiInit);
-
-idWiFi = setInterval(function () {
-  if (!isWiFiOk){
-    //// wake up wifi
-    console.log('isWiFiOk :: ' + isWiFiOk);
-    console.log('Try to connect WiFi');
-    if(wifi === undefined) {
-      console.log('WiFi module undefined');
-      wifi = require("ESP8266WiFi_0v25");
-    }
-    wifi = wifi.connect(Serial2, wifiInit);
-    // console.log('---'+wifi);
-  }
-}, 10000);
-
-nfc.on('tag', function(error, data) {
-    if (error) {
-        print('tag read error');
-    } else {
-        buffer = [];
-        console.log(' ========================================= ');
-        //console.log('UID::' + data.uid);
-        uidToSend = processUidToSend(data.uid);
-        //console.log('UID in HEX::' + uidToSend);
-        switch(chooseCommand){
-          case 1:
-            // for buy product
-            var prId = [0x07, 0x11];
-            sendMsgToGloLime(0x01, 0x02, 0x02, makeCmdDataToBuy(userIdLittleEndian,prId));
-            chooseCommand = 2;
-            break;
-          case 2:
-            // for get Balance value
-            sendMsgToGloLime(0x01, 0x01, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
-            userIdLittleEndian = [];
-            chooseCommand = 1;
-            break;
-        }
-    }
-    // каждые 1000 миллисекунд слушаем новую метку
-    setTimeout(function () {
-        nfc.listen();
-    }, 1000);
-});
-
-function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
-    var msg = [], msg_str = "";
-    //console.log('CmdData:: ' + cmdData);
-    msg = makeGloLimeRespArray(address, _frameId, comandCode, cmdData);
-    //console.log('MSG array:: ' + msg);
-    for (var i = 0; i < msg.length; i++)
-    {
-        msg_str += msg[i];
-    }
-    //console.log('MSG STR:: ' + msg_str);
-    client.connect({host: "192.168.91.80", port: 6767},  function(socket) {
-      console.log('Client connected');
-      console.log('REQUEST :: ' + _getHexStr(msg));
-      var s = "";
-      buffer = [];
-      for (var i = 0; i < msg.length; i++)
-      {
-          s += String.fromCharCode(msg[i]);
-      }
-      //console.log('REQUEST str:: ' + s);
-      socket.write(s);
-      isRespGetted = false;
-      setTimeout(function (arg) {
-        if (!isRespGetted){
-          console.log(' Timeout Error');
-          if (arg) {
-            arg.end();
-          }
-        } else {
-          console.log("data received");
-        }
-      }, 5000, socket);
-      socket.on('data', function(data){
-        console.log('RESP:: ' + data);
-        var isComplete = false;
-        for(var i = 0; i < data.length; i++)
-        {
-          putByte(data.charCodeAt(i), null);
-        }
-      });
-      socket.on('close',function(){
-          console.log('WARNING :: Socket connection closed! ');
-          //processGloLimeResponse(buffer);
-      });
-    });
-}
-
-//function recvComplete
-
-function processGloLimeResponse(resp){
-  var cmdExitCode, comandCode;
-  comandCode = resp[2];
-  console.log('RESPONSE:: ' + _getHexStr(buffer));
-  if (checkCRC16_CCITT(resp)){
-    switch (comandCode){
-        case 0x01:
-          // get Balance command
-          console.log(' ==> Process resp on | GetBalance | cmd ');
-          break;
-        case 0x02:
-          // Buy command
-          console.log(' ==> Process resp on | makeBuy | cmd ');
-          break;
-        default:
-          console.log(' ==> Cmd code in GloLimeResp unknown ');
-          break;
-    }
-    cmdExitCode = resp[3];
-    //console.log(' cmdExitCode' + cmdExitCode);
-    switch (cmdExitCode){
-      case ERROR_OK:
-        console.log(' ==> Operation successful');
-        switch (comandCode){
-          case 1:
-            // getBalance command
-            userIdLittleEndian = buffer.slice(4,8);
-            //console.log(' :: userIdLittleEndian -> ' + userIdLittleEndian);
-            userId = processLitleEnd(buffer.slice(4,8));
-            console.log(' :: userId -> ' + userId);
-            var tempBalance = buffer.slice(9,13);
-            //console.log(' :: tempBalance -> ' + tempBalance);
-            affordance = processLitleEnd(tempBalance);
-            console.log(' :: affordance -> ' + affordance);
-            break;
-          case 2:
-            // Buy command
-
-            break;
-          default:
-            break;
-        }
+var PREFIX_LEN = 5;
+function processTransportLayerCmd(cmd) {
+    var prefix = cmd.substr(0, PREFIX_LEN);
+    switch(prefix) {
+      case 'PWRUP':          //PWRUP
+        isPowerUp = true;
+        isVendDone = true;
+        console.log('PWRUP recieved');
         break;
-      case ERROR_INVALID_CRC:
-        console.log('ERROR: CRC incorrect');
+      case 'PRICE':          //PRICE:<VALUE>
+        srvid = 8633;
+        price = (cmd.split(':'))[1];
+        // Request to GloLime for buy product
+		var prId = [price >> 8, price & 0x00FF];
+        sendMsgToGloLime(0x01, 0x02, 0x02, makeCmdDataToBuy(userIdLittleEndian,prId));
+        isVendDone = true;
+        isSessionTimeout = false;
+        console.log('PRICE recieved: ' + parseInt(price, 10)/100);
         break;
-      case ERROR_INVALID_COMMAND:
-        console.log('ERROR: Cmd incorrect');
-        break;
-      case ERROR_INVALID_PARAMETER:
-        console.log('ERROR: Cmd parament incorrect');
+      case 'RESET':          //RESET
+        isVendDone = true;
+        console.log('RESET recieved');
         break;
       default:
-        console.log('Unknown comand exit code');
-        break;
-    }
-  }
-}
-
-function checkCRC16_CCITT(resp){
-    var respCrc = [resp[resp.length-1], resp[resp.length-2]];
-    //console.log(' CRC in resp: ' + respCrc);
-    var toCalcCRC = resp.slice(0,(resp.length-2));
-    //console.log(' to calc crc ' + toCalcCRC);
-    var currCrc = crc16_ccitt(toCalcCRC);
-    var tmp1 = (currCrc >> 8);
-    var tmp2 = (currCrc & 0x00FF);
-    //console.log(' Current CRC: ' + tmp1 + ' ' + tmp2);
-    if (tmp1 != respCrc[0]){
-      console.log(' !Attention! CRC is not correct');
-      return false;
-    } else {
-      if (tmp2 != respCrc[1]){
-        console.log(' !Attention! CRC is not correct');
-        return false;
-      }
-      console.log(' ==> CRC is correct');
-      return true;
+        //just log message
+        console.log('LOG: ' + cmd);
     }
 }
 
-function processLitleEnd(array){
-  var str = "";
-  var tmp = array.reverse();
-  for(var i=0; i<tmp.length; i++) {
-    str += tmp[i].toString(16); 
-  }
-  return parseInt(str, 16);
+var nfc = null;
+function initPeripherial() {
+    // setup serial for MDB transport communication
+    Serial4.setup(115200);
+    // setup RFID module 
+	I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
+	nfc = require("nfc").connect({i2c: I2C1, irqPin: P9});
+	
+    // setup WiFi module
+    Serial2.setup(115200, { rx: A3, tx : A2 });
+	wifi = require("ESP8266WiFi_0v25");
+	wifi = wifi.connect(Serial2, wifiInit);
+    
+    // setup ethernet module
+	/*
+    console.log("Setup ethernet module");
+    SPI2.setup({mosi:B15, miso:B14, sck:B13});
+    eth = require("WIZnet").connect(SPI2, P10);   
+    eth.setIP();
+    //eth.setIP({ip: "192.168.1.110", subnet: "255.255.255.0", gateway: "192.168.1.1", dns: "8.8.8.8"});       
+    var addr = eth.getIP();
+    console.log(addr);
+	*/
+}
+
+// start RFID listening
+function startRFIDListening() {
+	// обработка взаимодействия с RFID меткой
+	nfc.on('tag', function(error, data) {
+		if (error) {
+			print('tag read error');
+		} else {
+			buffer = [];
+			console.log(' ========================================= ');
+			//console.log('UID::' + data.uid);
+			uidToSend = processUidToSend(data.uid);
+			// console.log('UID in HEX::' + uidToSend);
+			// Request to GloLime for get Balance value
+			sendMsgToGloLime(0x01, 0x01, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
+			userIdLittleEndian = [];
+		}
+		// каждые 1000 миллисекунд слушаем новую метку
+		setTimeout(function () {
+			nfc.listen();
+		}, 1000);
+	});
 }
 
 function makeCmdDataToGetBalance(cardType, cardUid){
@@ -340,89 +261,6 @@ function makeCmdDataToGetBalance(cardType, cardUid){
     return data;
 }
 
-function makeCmdDataToBuy(_userId, _productId){
-    //console.log(' Product ID ' + _productId);
-    //console.log(' User ID ' + _userId);
-    var proIdToSend = [];
-    proIdToSend[0] = _productId[1];
-    proIdToSend[1] = _productId[0];
-    proIdToSend[2] = 0x00;
-    proIdToSend[3] = 0x00;
-    return (_userId.concat(proIdToSend).concat([0x03, 0x03, 0x03, 0x3]));
-}
-
-function processUidToSend(uid){
-    var str = "", result = [];
-    for (var i = 0; i < uid.length; i++)
-    {
-        str += uid[i].toString(16);
-    }
-    //console.log('uid in str::  ' + str);
-    for (var j = 0; j < str.length; j++)
-    {
-        result[j] = str.charCodeAt(j);
-    }
-    result[result.length] = 0;
-    return result;
-}
-
-// functions for cmd parser
-function putByte(cmdByte, callback){
-	switch(cmdByte)
-	{
-		case PREAMBLE:
-			parser_state = BEGIN_STATE;
-			break;
-		case ESC:
-			parser_state = ESCSUM_STATE;
-			break;
-		case POSTAMBLE:
-			parser_state = END_STATE;
-            isRespGetted = true;
-            processGloLimeResponse(buffer);
-            //console.log('!!!' + buffer);
-            if(callback == 'function') {
-              callback();
-            }
-            buffer = [];
-			break;
-		default:
-			processByte(cmdByte);
-			break;
-	}
-}
-
-function processByte(cmdByte){
-	switch (parser_state){
-		case BEGIN_STATE:
-			// add to end buffer cmdByte
-			buffer[buffer.length] = cmdByte;
-			break;
-		case ESCSUM_STATE:
-			// add to end buffer cmdByte
-            //console.log('EscSum' + EscSum);
-			buffer[buffer.length] = EscSum[cmdByte];
-			parser_state = BEGIN_STATE;
-			break;
-		case END_STATE:
-			//
-			break;
-	}
-}
-
-function _getHexStr(data) {
-  var str = '';
-  for(var i=0; i<data.length; i++) {
-    str += ('0x' + data[i].toString(16) + ' ');
-  }
-  return str;
-}
-
-function fireParseComplete(){
-	//console.log(_getHexStr(buffer));
-}
-
-// public virtual byte[] ToArray()
 function makeGloLimeRespArray (_addr, _frameId, _cmdCode, cmdData){
 	var size = 3 + cmdData.length;
     var array = [];
@@ -490,7 +328,267 @@ function bytestuffToPesp(array){
   return result;
 }
 
-// functions for CRC16_X25
+// to make and send message - request - to GloLime by socket 
+function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
+    var msg = [], msg_str = "";
+    //console.log('CmdData:: ' + cmdData);
+    msg = makeGloLimeRespArray(address, _frameId, comandCode, cmdData);
+    //console.log('MSG array:: ' + msg);
+    for (var i = 0; i < msg.length; i++)
+    {
+        msg_str += msg[i];
+    }
+    //console.log('MSG STR:: ' + msg_str);
+    client.connect({host: "192.168.91.80", port: 6767},  function(socket) {
+        console.log('Client connected');
+        console.log('REQUEST :: ' + _getHexStr(msg));
+        var s = "";
+        buffer = [];
+        for (var i = 0; i < msg.length; i++)
+        {
+			s += String.fromCharCode(msg[i]);
+		}
+		//console.log('REQUEST str:: ' + s);
+		socket.write(s);
+		isRespGot = false;
+		setTimeout(function (arg) {
+        if (!isRespGot){
+			console.log(' Timeout Error');
+			if (arg) {
+				arg.end();
+			}
+			} else {
+          console.log("data received");
+			}
+		}, 5000, socket);
+		socket.on('data', function(data){
+			// console.log('RESP:: ' + data);
+			var isComplete = false;
+			for(var i = 0; i < data.length; i++)
+			{
+			  putByte(data.charCodeAt(i), null);
+			}
+		});
+		socket.on('close',function(){
+			console.log('WARNING :: Socket connection closed! ');
+			//processGloLimeResponse(buffer);
+		});
+    });
+}
+
+function processGloLimeResponse(resp){
+  var cmdExitCode, comandCode, numBalance;
+  comandCode = resp[2];
+  console.log('RESPONSE:: ' + _getHexStr(buffer));
+  if (checkCRC16_CCITT(resp)){
+    switch (comandCode){
+        case 0x01:
+          // get Balance command
+          console.log(' ==> Process resp on | GetBalance | cmd ');
+          break;
+        case 0x02:
+          // Buy command
+          console.log(' ==> Process resp on | makeBuy | cmd ');
+          break;
+        default:
+          console.log(' ==> Cmd code in GloLimeResp unknown ');
+          break;
+    }
+    cmdExitCode = resp[3];
+    //console.log(' cmdExitCode' + cmdExitCode);
+    switch (cmdExitCode){
+      case ERROR_OK:
+        console.log(' ==> Operation successful');
+        switch (comandCode){
+          case 1:
+            // getBalance command
+            userIdLittleEndian = buffer.slice(4,8);
+            //console.log(' :: userIdLittleEndian -> ' + userIdLittleEndian);
+            userId = processLitleEnd(buffer.slice(4,8));
+            console.log(' :: userId -> ' + userId);/ 
+            var tempBalance = buffer.slice(9,13);
+            //console.log(' :: tempBalance -> ' + tempBalance);
+			// get Balance value in DEC
+            numBalance = processLitleEnd10(tempBalance);
+		    if(!isNaN(numBalance)) {
+				if((numBalance/100) > 30) { //user can start vend operation
+				  isVendDone = false;       //vend session started
+				  Serial4.write(numBalance);  
+				  console.log("Send " + numBalance + "RUB to nucleo");
+				  // start timer for VEND session
+				  isSessionTimeout = true;          
+				  setTimeout(function(){
+					if(isSessionTimeout) {
+						console.log("SESSION TIMED OUT");
+						isVendDone = true;   //vend session closed
+						isSessionTimeout = false;
+					}
+				  }, 40000);
+				}
+		    } else {
+				console.log("Recieved incorrect data");
+			}
+            console.log(' :: numBalance -> ' + numBalance);
+            break;
+          case 2:
+            // Buy command
+
+            break;
+          default:
+            break;
+        }
+        break;
+      case ERROR_INVALID_CRC:
+        console.log('ERROR: CRC incorrect');
+        break;
+      case ERROR_INVALID_COMMAND:
+        console.log('ERROR: Cmd incorrect');
+        break;
+      case ERROR_INVALID_PARAMETER:
+        console.log('ERROR: Cmd parament incorrect');
+        break;
+      default:
+        console.log('Unknown comand exit code');
+        break;
+    }
+  }
+}
+
+function checkCRC16_CCITT(resp){
+    var respCrc = [resp[resp.length-1], resp[resp.length-2]];
+    //console.log(' CRC in resp: ' + respCrc);
+    var toCalcCRC = resp.slice(0,(resp.length-2));
+    //console.log(' to calc crc ' + toCalcCRC);
+    var currCrc = crc16_ccitt(toCalcCRC);
+    var tmp1 = (currCrc >> 8);
+    var tmp2 = (currCrc & 0x00FF);
+    //console.log(' Current CRC: ' + tmp1 + ' ' + tmp2);
+    if (tmp1 != respCrc[0]){
+      console.log(' !Attention! CRC is not correct');
+      return false;
+    } else {
+      if (tmp2 != respCrc[1]){
+        console.log(' !Attention! CRC is not correct');
+        return false;
+      }
+      console.log(' ==> CRC is correct');
+      return true;
+    }
+}
+
+// return HEX value
+function processLitleEnd(array){
+  var str = "";
+  var tmp = array.reverse();
+  for(var i=0; i<tmp.length; i++) {
+    str += tmp[i].toString(16); 
+  }
+  return parseInt(str, 16);
+}
+
+// return DEC value
+function processLitleEnd10(array){
+  var str = "";
+  var tmp = array.reverse();
+  for(var i=0; i<tmp.length; i++) {
+    str += tmp[i].toString(16); 
+  }
+  return parseInt(str, 10);
+}
+
+function makeCmdDataToGetBalance(cardType, cardUid){
+    var data = [];
+    data[0] = cardType;
+    for (var i = 1, j = 0; i < (cardUid.length+1); i++, j++)
+    {
+        data[i] = cardUid[j];
+    }
+    return data;
+}
+
+function makeCmdDataToBuy(_userId, _productId){
+    //console.log(' Product ID ' + _productId);
+    //console.log(' User ID ' + _userId);
+    var proIdToSend = [];
+    proIdToSend[0] = _productId[1];
+    proIdToSend[1] = _productId[0];
+    proIdToSend[2] = 0x00;
+    proIdToSend[3] = 0x00;
+    return (_userId.concat(proIdToSend).concat([0x03, 0x03, 0x03, 0x3]));
+}
+
+function processUidToSend(uid){
+    var str = "", result = [];
+    for (var i = 0; i < uid.length; i++)
+    {
+        str += uid[i].toString(16);
+    }
+    //console.log('uid in str::  ' + str);
+    for (var j = 0; j < str.length; j++)
+    {
+        result[j] = str.charCodeAt(j);
+    }
+    result[result.length] = 0;
+    return result;
+}
+
+// functions for cmd parser
+function putByte(cmdByte, callback){
+	switch(cmdByte)
+	{
+		case PREAMBLE:
+			parser_state = BEGIN_STATE;
+			break;
+		case ESC:
+			parser_state = ESCSUM_STATE;
+			break;
+		case POSTAMBLE:
+			parser_state = END_STATE;
+            isRespGot = true;
+            processGloLimeResponse(buffer);
+            //console.log('!!!' + buffer);
+            if(callback == 'function') {
+              callback();
+            }
+            buffer = [];
+			break;
+		default:
+			processByte(cmdByte);
+			break;
+	}
+}
+
+function processByte(cmdByte){
+	switch (parser_state){
+		case BEGIN_STATE:
+			// add to end buffer cmdByte
+			buffer[buffer.length] = cmdByte;
+			break;
+		case ESCSUM_STATE:
+			// add to end buffer cmdByte
+            //console.log('EscSum' + EscSum);
+			buffer[buffer.length] = EscSum[cmdByte];
+			parser_state = BEGIN_STATE;
+			break;
+		case END_STATE:
+			//
+			break;
+	}
+}
+
+function _getHexStr(data) {
+  var str = '';
+  for(var i=0; i<data.length; i++) {
+    str += ('0x' + data[i].toString(16) + ' ');
+  }
+  return str;
+}
+
+function fireParseComplete(){
+	//console.log(_getHexStr(buffer));
+}
+
+// functions for calculation CRC16_X25
 function crc16_ccitt(bytes){
     var crc = initialValue;
     for (var i = 0; i < bytes.length; i++)
@@ -534,3 +632,48 @@ function Reflect8(val){
     }
     return resByte;
 }
+
+
+var command = '';
+var buffer  = '';
+function startSerialListening() {
+    setInterval(function() {
+        var chars = Serial4.available();
+        if(chars > 0) {
+          buffer += Serial4.read(chars);
+          var lastIdx = buffer.indexOf('\n');
+          if(lastIdx > 0) {
+            command = buffer.substring(0, lastIdx);
+            buffer = buffer.substring(lastIdx, buffer.length-1);
+            processTransportLayerCmd(command);
+          }
+        }
+    }, 5);
+}
+
+// initPeripherial();
+// startRFIDListening();
+// startSerialListening();
+
+E.on('init', function() {
+    initPeripherial();
+	
+	// waiting for WiFi and NFC wake UP
+	idWiFi = setInterval(function () {
+		if (!isWiFiOk){
+			//// wake up wifi
+			console.log('isWiFiOk :: ' + isWiFiOk);
+			console.log('Try to connect WiFi');
+			if(wifi === undefined) {
+			  console.log('WiFi module undefined');
+			  wifi = require("ESP8266WiFi_0v25");
+			}
+			wifi = wifi.connect(Serial2, wifiInit);
+			// console.log('---'+wifi);
+		}
+	}, 10000);
+	if (idRFID = 'undefined') {
+		startRFIDListening();
+		startSerialListening();
+	}
+});
