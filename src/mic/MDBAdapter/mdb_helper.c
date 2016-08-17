@@ -150,16 +150,16 @@ int read_balance() {
 }
 
 // this fuction for send text command to espruino board
-void send_to_espruino(const char *cmd, unsigned int length) {
-#if defined(__PLATFORM_PC__)
-	unsigned int i = 0;
-	for(i=0; i<length; i++) {
-		unsigned int val = (unsigned int)cmd[i];
-		printf("0x%02x", val);
-		printf(" ");
-	}
-	printf("\n");
-#elif defined(__PLATFORM_STM32__)
-	USART2_Send_String(cmd);
-#endif
-}
+//void send_to_espruino(const char *cmd, unsigned int length) {
+//#if defined(__PLATFORM_PC__)
+//	unsigned int i = 0;
+//	for(i=0; i<length; i++) {
+//		unsigned int val = (unsigned int)cmd[i];
+//		printf("0x%02x", val);
+//		printf(" ");
+//	}
+//	printf("\n");
+//#elif defined(__PLATFORM_STM32__)
+//	USART2_Send_String(cmd);
+//#endif
+//}

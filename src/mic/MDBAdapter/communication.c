@@ -1,8 +1,8 @@
 #include "communication.h"
 
 // 
-unsigned char  _parser_state = ST_UNDEFINED;
-unsigned char __esc_sym = 0x00;
+unsigned char  __parser_state = ST_UNDEFINED;
+unsigned char  __esc_sym = 0xFF;
 unsigned short __command_length = 0;
 
 // forward function definitions
