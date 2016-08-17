@@ -35,3 +35,10 @@ src/VSproj/MDBAdapter/MDBAdapter.sdf
 doc/pn532_datasheet.pdf
 src/mic/MDBAdapter/MDBAdapter/Debug/
 src/espruino/balance_checker.js
+src/mic/MDBAdapter/settings/MDBAdapterSTMF042_Eclipse Debug.jlink
+src/mic/MDBAdapter/settings/MDBAdapterSTMF042.dni
+src/mic/MDBAdapter/settings/MDBAdapterSTM32F042_Eclipse Debug.jlink
+_PoC/GloLimeSvr/
+_PoC/VendingTest/
+_PoC/stm32_timer/Timer.c
+src/mic/MDBAdapter/settings/MDBAdapterSTM32F042.dni
