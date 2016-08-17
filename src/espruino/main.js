@@ -1,28 +1,29 @@
 var balance = "";
-var curr_balance = "";
-var bin_curr_balance = "";
-var isPowerUp = false;
+var isEnabled = true;
 var isVendDone = true;
 var isSessionTimeout = false;
 var chip = "";
+
+var SPORTLIFE_HOST = "sync.sportlifeclub.ru";
+//var SPORTLIFE_HOST = "172.16.0.68";
 
 // WIFI configuration
 //var ssid = "neiron";
 //var pass = "msp430f2013";
 
-var ssid = "service";
-var pass = "921249514821";
+//var ssid = "service";
+//var pass = "921249514821";
 
-//var ssid = "VendexFree";
-//var pass = "vendex2016";
+var ssid = "VendexFree";
+var pass = "vendex2016";
 
 // var ssid = "SauronAP";
 // var pass = "yuwb3795";
 
 
 function logger(msg) {
-    //console.log(msg);
-    Serial2.write(msg + "\r\n");
+    console.log(msg);
+    //Serial2.write(msg + "\r\n");
 }
 
 // REST: GetState error responses
@@ -38,7 +39,7 @@ function getBalance(chipUid) {
   //TODO: read chip id from RFID
   var content = "chip="+chipUid;
   var options = {
-	host: 'sync.sportlifeclub.ru',
+	host: SPORTLIFE_HOST,
 	port: '60080',
     path: '/slsrv/Chip/GetState',
     protocol: "http:",
@@ -69,7 +70,7 @@ function getBalance(chipUid) {
           Serial4.write("3000\n");  //fixed balance for SportLife (30RUB)
           logger("Send 30RUB to nucleo");
           // start timer for VEND session
-          isSessionTimeout = true;          
+          isSessionTimeout = true;
           setTimeout(function(){
             if(isSessionTimeout) {
                 logger("SESSION TIMED OUT");
@@ -90,7 +91,7 @@ function getBalance(chipUid) {
 function setBalance(chip, srvid, price) {
   var content = "dev=1" + "&chip=" + chip + "&srvid=" + srvid + "&price=" + price;
   var options = {
-	host: 'sync.sportlifeclub.ru',
+	host: SPORTLIFE_HOST,
 	port: '60080',
     path: '/slsrv/chip/writeoff',
     protocol: "http:",
@@ -119,46 +120,62 @@ function setBalance(chip, srvid, price) {
 
 var PREFIX_LEN = 5;
 function processTransportLayerCmd(cmd) {
-    var prefix = cmd.substr(0, PREFIX_LEN);
+    //var prefix = cmd.substr(0, PREFIX_LEN);
+    var array = cmd.split(':');
+    var prefix = array[0];
     switch(prefix) {
-      case 'PWRUP':          //PWRUP
-        isPowerUp = true;
+      case 'ENABLE':          //ENABLE
+        isEnabled = true;
         isVendDone = true;
-        logger('PWRUP recieved');
+        logger('ENABLE recieved');
         //LED notification
         LED1.set();
         setTimeout(function(){LED1.reset();}, 3000);
         break;
-      case 'PRICE':          //PRICE:<VALUE>
+      case 'DISABLE':
+        isEnabled = false;
+        logger('DISABLE received');
+        break;
+      case 'VEND':          //VEND:<PRODUCT ID>:<PRODUCT PRICE>
         srvid = 8633;
-        price = (cmd.split(':'))[1];
+        product_id = array[1];
+        product_price = array[2];
         //send balance to SportLife server
         isVendDone = true;
         isSessionTimeout = false;
         LED1.reset();
-        logger('PRICE recieved: ' + parseInt(price, 10)/100);        
-        setBalance(chip, srvid, price);        
+        logger('VEND INFO | PRODUCT ID: ' + product_price + '   PRODUCT PRICE: ' + parseInt(product_price, 10)/100);
+        setBalance(chip, srvid, price);
         break;
-      case 'RESET':          //RESET
+      case 'CANCEL':          //RESET
         isVendDone = true;
-        logger('RESET recieved');
+        logger('CANCEL recieved');
         break;
       default:
-        //just log message                
+        //just log message
         logger('LOG: ' + cmd);
     }
-}
-
-function resetNucleo() {
 }
 
 var nfc = null;
 function initPeripherial() {
     // init nucleo state
-    P0.reset();
+    // P0.reset();
     
-    Serial2.setup(115200);   //logger serial port    
+    // setup USART interfaces
+    //Serial2.setup(115200);   //logger serial port    
     Serial4.setup(115200);   //MDB transport serial port
+    
+    // setup ethernet module
+    /*
+    logger("Setup ethernet module");
+    SPI2.setup({mosi:B15, miso:B14, sck:B13});
+    eth = require("WIZnet").connect(SPI2, P10);   
+    //eth.setIP({ip:"172.16.9.160", subnet:"255.255.0.0", gateway:"172.16.0.2", dns:"172.16.0.2"});
+    eth.setIP();
+    var addr = eth.getIP();
+    logger(addr.toString());    
+    */
     
     // setup RFID module
     I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
@@ -168,13 +185,12 @@ function initPeripherial() {
         logger('RFID wake up error', error);
       } else {
         logger('RFID wake up OK');
-        P0.set();
+        //P0.set();
         nfc.listen();
       }
     });
     
     // setup WiFi module
-    /*
     Serial2.setup(115200, { rx: A3, tx : A2 });
     var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
       if (err) {
@@ -193,15 +209,7 @@ function initPeripherial() {
             });
           });
       }
-    }); */
-    
-    // setup ethernet module
-    logger("Setup ethernet module");
-    SPI2.setup({mosi:B15, miso:B14, sck:B13});
-    eth = require("WIZnet").connect(SPI2, P10);   
-    eth.setIP();
-    var addr = eth.getIP();
-    logger(addr.toString());
+    });
 }
 
 // mifare constants
@@ -248,7 +256,7 @@ function startRFIDListening() {
       } else {
         logger('RFID touched');
         //TODO: convert UID to correct chipid
-        if (isPowerUp & isVendDone){
+        if (isEnabled & isVendDone){
             logger(data);    // UID и ATQA
             readChipIdFromRFID(data.uid, RFID_KEY, RFID_BLOCK_NUM, getBalance);
         }
@@ -266,6 +274,7 @@ function startSerialListening() {
         var chars = Serial4.available();
         if(chars > 0) {
           buffer += Serial4.read(chars);
+          //console.log("BUFFER: " + buffer);
           var lastIdx = buffer.indexOf('\n');
           if(lastIdx > 0) {
             command = buffer.substring(0, lastIdx);
@@ -276,8 +285,14 @@ function startSerialListening() {
     }, 5);
 }
 
+initPeripherial();
+startRFIDListening();
+startSerialListening();
+
+/*
 E.on('init', function() {
     initPeripherial();
     startRFIDListening();
     startSerialListening();
 });
+*/
