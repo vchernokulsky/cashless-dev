@@ -2,6 +2,9 @@
 
 #include <string.h>
 
+char log_buffer[128];
+char amnt_buf[8];
+
 #if defined(__PLATFORM_PC__)
 	#include <memory.h>
 	#include <stdio.h>
@@ -15,6 +18,16 @@ void log(const char *msg) {
 #elif defined(__PLATFORM_STM32__)
 	USART2_Send_String(msg);
 #endif
+}
+
+void log_recv_amount(unsigned short amount) {
+	memset(log_buffer, 0x00, 128);
+	memset(amnt_buf, 0x00, 8);
+	strcat(log_buffer, "RECV AMOUNT: \0");
+	itoa(amount, amnt_buf);
+	strcat(log_buffer, amnt_buf);
+	strcat(log_buffer, "\n\0");
+	USART2_Send_String(log_buffer);
 }
 
 void log_array(const char *msg, const char *arr, unsigned int arr_len) {

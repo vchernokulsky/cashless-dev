@@ -74,6 +74,7 @@ void send_vend_info(unsigned short id, unsigned short price) {
 	itoa(price, str_item_price);
 	strcat(str_espr_cmd, "VEND:");
 	strcat(str_espr_cmd, str_item_id);
+	strcat(str_espr_cmd, ":");
 	strcat(str_espr_cmd, str_item_price);
 	strcat(str_espr_cmd, "\n");
 	send_to_espruino(str_espr_cmd, strlen(str_espr_cmd));

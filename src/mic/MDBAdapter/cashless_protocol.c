@@ -31,7 +31,7 @@ unsigned short session_timeout_seconds = 10;
 char str_item_price[16];
 char str_espr_cmd[23];
 unsigned int item_price  = 0;
-unsigned int cur_balance = 3000;
+unsigned int cur_balance = 0;
 //temporary
 unsigned char isInfoShown = 0x00;
 
@@ -204,12 +204,11 @@ void process_enabled(unsigned char* data){
 			log("(ENABLED)|RECV:RESET ; SEND: ACK\n");
 			break;
 		case POLL:
-			cur_balance = read_balance();
+			cur_balance = read_user_balance();
+			//log_recv_amount(cur_balance);
 			if (cur_balance > 0) {  // BEGIN SESSION
 				set_led_state(0x01);
 				//cur_balance = cur_balance > MAX_AMOUNT_VALUE ? MAX_AMOUNT_VALUE : cur_balance;
-				//TODO: this is HOTFIX for SportLife use-case
-				cur_balance = 3000; // all products 30RUB
 				getBalanceArray(cur_balance, result);
 				fill_mbd_command(&resp, result, 4);
 				send_mdb_command(&resp);
@@ -258,10 +257,10 @@ void process_session_idle(unsigned char* data){
 	char resp_session_cancel[2] = {0x04,0x04};
 	char resp_end_session[2] = {0x07,0x07};
 
-	unsigned int time_interval = vend_attempts_count*110;
-	unsigned int timeout_sec = session_timeout_seconds*1000;
+	//unsigned int time_interval = vend_attempts_count*110;
+	//unsigned int timeout_sec = session_timeout_seconds*1000;
 
-	int value = 0;
+	unsigned int value = 0;
 	int cmdId =    (int)(data[0] & MASK_CMD);
 	int subCmdId = -1;
 	switch (cmdId){
@@ -277,7 +276,8 @@ void process_session_idle(unsigned char* data){
 			subCmdId = (int)data[1];
 			switch(subCmdId) {
 				case 0x00: // Vend Request
-					item_price = ((value | (int)data[2]) << 8) | (int)data[3];  //item price SCALED!!!
+					item_price = ((value | (unsigned int)data[2]) << 8) | (unsigned int)data[3];  //item price SCALED!!!
+					//log_recv_amount(item_price);
 					fill_mbd_command(&resp, resp_ack, 1);
 					send_mdb_command(&resp);
 					_cashless_state = ST_VEND; 
@@ -302,8 +302,7 @@ void process_session_idle(unsigned char* data){
 				case VEND_NOTHING:
 					// increment vend timeout counter
 					vend_attempts_count++;
-					//if(time_interval > timeout_sec) {
-					if(vend_attempts_count > 20) {
+					if(vend_attempts_count > 35) {
 						vend_result_variable = VEND_CANCEL; //User timeout
 						vend_attempts_count = 0;
 					}

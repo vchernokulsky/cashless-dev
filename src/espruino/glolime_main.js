@@ -1,8 +1,8 @@
 var balance = "";
 
-var isPowerUp = false;
+var isEnabled = false;
 var isVendDone = true;
-var isSessionTimeout = false;
+//var isSessionTimeout = false;
 
 // WIFI configuration
 //var ssid = "neiron";
@@ -96,6 +96,9 @@ var crcTable = [0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50a5,
 0x8fd9, 0x9ff8, 0x6e17, 0x7e36, 0x4e55, 0x5e74,
 0x2e93, 0x3eb2, 0x0ed1, 0x1ef0];
 
+// Frame ID
+var frameId = 0x00;
+
 // for CRC16_X25 calculation
 var initialValue = 0xffff;
 var castMask     = 0xFFFF;
@@ -126,6 +129,11 @@ var isWiFiOk  = false;
 // For setInterval to check WiFi and RFID/NFC
 var idWiFi, idRFID;
 // ---------------------------------------------------------------
+
+function logger(msg) {
+    console.log(msg);
+    //Serial2.write(msg + "\r\n");
+}
 
 // Init functions
 function nfcInit(error){
@@ -174,32 +182,56 @@ function wifiInit(err) {
     }
 }
 
+uintToByteArray = function(/*long*/long) {
+    // we want to represent the input as a 8-bytes array
+    var byteArray = [0, 0, 0, 0];
+    for ( var index = 0; index < byteArray.length; index ++ ) {
+        var byte = long & 0xff;
+        byteArray [ index ] = byte;
+        long = (long - byte) / 256 ;
+    }
+
+    return byteArray;
+};
+
 var PREFIX_LEN = 5;
 function processTransportLayerCmd(cmd) {
-    var prefix = cmd.substr(0, PREFIX_LEN);
+    //var prefix = cmd.substr(0, PREFIX_LEN);
+    var array = cmd.split(':');
+    var prefix = array[0];
     switch(prefix) {
-      case 'PWRUP':          //PWRUP
-        isPowerUp = true;
+      case 'ENABLE':          //ENABLE:\n
+        isEnabled = true;
         isVendDone = true;
-        console.log('PWRUP recieved');
+        logger('ENABLE recieved');
+        //LED notification
+        LED1.set();
+        setTimeout(function(){LED1.reset();}, 3000);
         break;
-      case 'PRICE':          //PRICE:<VALUE>
-        srvid = 8633;
-        price = (cmd.split(':'))[1];
-        // Request to GloLime for buy product
-		var prId = [price >> 8, price & 0x00FF];
-        sendMsgToGloLime(0x01, 0x02, 0x02, makeCmdDataToBuy(userIdLittleEndian,prId));
-        isVendDone = true;
-        isSessionTimeout = false;
-        console.log('PRICE recieved: ' + parseInt(price, 10)/100);
+      case 'DISABLE':       //DISABLE:\n  
+        isEnabled = false;
+        logger('DISABLE received');
         break;
-      case 'RESET':          //RESET
+      case 'VEND':          //VEND:<PRODUCT ID>:<PRODUCT PRICE>\n
+        str_product_id = array[1];
+        str_product_price = array[2];
+        //send balance to SportLife server
         isVendDone = true;
-        console.log('RESET recieved');
+        //isSessionTimeout = false;
+        //LED1.reset();
+        logger('VEND INFO | PRODUCT ID: ' + str_product_id + '   PRODUCT PRICE: ' + parseInt(str_product_price, 10)/100);
+        product_id = uintToByteArray(parseInt(str_product_id));
+        product_price = uintToByteArray(parseInt(str_product_price));
+        sendMsgToGloLime(0x01, frameId, 0x02, makeCmdDataToBuy(userIdLittleEndian, product_id, product_price));
+        frameId++;
+        break;
+      case 'CANCEL':          //CANCEL:\n
+        isVendDone = true;
+        logger('CANCEL recieved');
         break;
       default:
         //just log message
-        console.log('LOG: ' + cmd);
+        logger('LOG: ' + cmd);
     }
 }
 
@@ -241,8 +273,11 @@ function startRFIDListening() {
 			uidToSend = processUidToSend(data.uid);
 			// console.log('UID in HEX::' + uidToSend);
 			// Request to GloLime for get Balance value
-			sendMsgToGloLime(0x01, 0x01, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
-			userIdLittleEndian = [];
+            if (isVendDone){
+                sendMsgToGloLime(0x01, frameId, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
+                frameId++;
+                userIdLittleEndian = [];
+            }
 		}
 		// каждые 1000 миллисекунд слушаем новую метку
 		setTimeout(function () {
@@ -403,28 +438,26 @@ function processGloLimeResponse(resp){
           case 1:
             // getBalance command
             userIdLittleEndian = buffer.slice(4,8);
-            //console.log(' :: userIdLittleEndian -> ' + userIdLittleEndian);
             userId = processLitleEnd(buffer.slice(4,8));
-            console.log(' :: userId -> ' + userId);/ 
+            //console.log(' :: userId -> ' + userId);
             var tempBalance = buffer.slice(9,13);
-            //console.log(' :: tempBalance -> ' + tempBalance);
+            console.log(' :: tempBalance -> ' + tempBalance);
 			// get Balance value in DEC
-            numBalance = processLitleEnd10(tempBalance);
+            numBalance = processLitleEnd(tempBalance);
 		    if(!isNaN(numBalance)) {
-				if((numBalance/100) > 30) { //user can start vend operation
-				  isVendDone = false;       //vend session started
-				  Serial4.write(numBalance);  
-				  console.log("Send " + numBalance + "RUB to nucleo");
-				  // start timer for VEND session
-				  isSessionTimeout = true;          
-				  setTimeout(function(){
-					if(isSessionTimeout) {
-						console.log("SESSION TIMED OUT");
-						isVendDone = true;   //vend session closed
-						isSessionTimeout = false;
-					}
-				  }, 40000);
-				}
+              isVendDone = false;       //vend session started
+              var balanceToSend = numBalance.toString(10)+"\n";
+              console.log("  :: balanceToSend -> " + balanceToSend);
+              Serial4.write(balanceToSend);  
+              // start timer for VEND session
+              //isSessionTimeout = true;          
+              //setTimeout(function(){
+              //  if(isSessionTimeout) {
+              //      console.log("SESSION TIMED OUT");
+              //      isVendDone = true;   //vend session closed
+              //      isSessionTimeout = false;
+              //  }
+              //}, 40000);
 		    } else {
 				console.log("Recieved incorrect data");
 			}
@@ -486,16 +519,6 @@ function processLitleEnd(array){
   return parseInt(str, 16);
 }
 
-// return DEC value
-function processLitleEnd10(array){
-  var str = "";
-  var tmp = array.reverse();
-  for(var i=0; i<tmp.length; i++) {
-    str += tmp[i].toString(16); 
-  }
-  return parseInt(str, 10);
-}
-
 function makeCmdDataToGetBalance(cardType, cardUid){
     var data = [];
     data[0] = cardType;
@@ -506,7 +529,7 @@ function makeCmdDataToGetBalance(cardType, cardUid){
     return data;
 }
 
-function makeCmdDataToBuy(_userId, _productId){
+function makeCmdDataToBuy(_userId, _productId, _productPrice){
     //console.log(' Product ID ' + _productId);
     //console.log(' User ID ' + _userId);
     var proIdToSend = [];
@@ -514,7 +537,12 @@ function makeCmdDataToBuy(_userId, _productId){
     proIdToSend[1] = _productId[0];
     proIdToSend[2] = 0x00;
     proIdToSend[3] = 0x00;
-    return (_userId.concat(proIdToSend).concat([0x03, 0x03, 0x03, 0x3]));
+    var prodPriceToSend = [];
+    prodPriceToSend[0] = _productPrice[1];
+    prodPriceToSend[1] = _productPrice[0];
+    prodPriceToSend[2] = 0x00;
+    prodPriceToSend[3] = 0x00;    
+    return (_userId.concat(proIdToSend).concat(prodPriceToSend));
 }
 
 function processUidToSend(uid){
@@ -651,11 +679,7 @@ function startSerialListening() {
     }, 5);
 }
 
-// initPeripherial();
-// startRFIDListening();
-// startSerialListening();
-
-E.on('init', function() {
+//E.on('init', function() {
     initPeripherial();
 	
 	// waiting for WiFi and NFC wake UP
@@ -672,8 +696,8 @@ E.on('init', function() {
 			// console.log('---'+wifi);
 		}
 	}, 10000);
-	if (idRFID = 'undefined') {
+	if (idRFID == 'undefined') {
 		startRFIDListening();
 		startSerialListening();
 	}
-});
+//});
