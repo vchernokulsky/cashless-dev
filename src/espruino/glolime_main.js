@@ -117,6 +117,7 @@ var client, wifi;
 var userId;
 // userId in LittleEndian format
 var userIdLittleEndian;
+var userType;
 
 // ID product to buy (get from MDB device)
 var productId;
@@ -135,54 +136,7 @@ function logger(msg) {
     //Serial2.write(msg + "\r\n");
 }
 
-// Init functions
-function nfcInit(error){
-  if (error) {
-      print('RFID wake up error', error);
-  } else {
-      print('RFID wake up OK');
-      isRFIDOk = true;
-      console.log('Clear interval RFID...');
-      clearInterval(idRFID);
-      nfc.listen();
-  }
-}
-
-function wifiConnect(err){
-    if (err) throw err;
-    isWiFiOk = true;
-    console.log("Connected to WiFi");
-	client = require("net");
-    clearInterval(idWiFi);
-    nfc.wakeUp(nfcInit);
-	// waiting for RFID wake up
-    idRFID = setInterval(function () {
-      if (!isRFIDOk){
-        // wake up rfid
-        nfc.wakeUp(nfcInit);
-      }
-    }, 10000);
-}
-
-function wifiReset(err){
-  if (err) {
-    console.log("Error WiFi module reset");
-    throw err;
-  }
-  console.log("Connecting to WiFi");
-  wifi.connect(ssid, pass, wifiConnect);
-}
-
-function wifiInit(err) {
-    if (err) {
-      console.log("Error WiFi module connection");
-      throw err;
-    } else {
-		wifi.reset(wifiReset);
-    }
-}
-
-uintToByteArray = function(/*long*/long) {
+function uintToByteArray(/*long*/long) {
     // we want to represent the input as a 8-bytes array
     var byteArray = [0, 0, 0, 0];
     for ( var index = 0; index < byteArray.length; index ++ ) {
@@ -192,7 +146,7 @@ uintToByteArray = function(/*long*/long) {
     }
 
     return byteArray;
-};
+}
 
 var PREFIX_LEN = 5;
 function processTransportLayerCmd(cmd) {
@@ -220,7 +174,7 @@ function processTransportLayerCmd(cmd) {
         //isSessionTimeout = false;
         //LED1.reset();
         logger('VEND INFO | PRODUCT ID: ' + str_product_id + '   PRODUCT PRICE: ' + parseInt(str_product_price, 10)/100);
-        product_id = uintToByteArray(parseInt(str_product_id));
+        product_id = uintToByteArray(parseInt(str_product_id)+1);
         product_price = uintToByteArray(parseInt(str_product_price));
         sendMsgToGloLime(0x01, frameId, 0x02, makeCmdDataToBuy(userIdLittleEndian, product_id, product_price));
         frameId++;
@@ -233,57 +187,6 @@ function processTransportLayerCmd(cmd) {
         //just log message
         logger('LOG: ' + cmd);
     }
-}
-
-var nfc = null;
-function initPeripherial() {
-    // setup serial for MDB transport communication
-    Serial4.setup(115200);
-    // setup RFID module 
-	I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
-	nfc = require("nfc").connect({i2c: I2C1, irqPin: P9});
-	
-    // setup WiFi module
-    Serial2.setup(115200, { rx: A3, tx : A2 });
-	wifi = require("ESP8266WiFi_0v25");
-	wifi = wifi.connect(Serial2, wifiInit);
-    
-    // setup ethernet module
-	/*
-    console.log("Setup ethernet module");
-    SPI2.setup({mosi:B15, miso:B14, sck:B13});
-    eth = require("WIZnet").connect(SPI2, P10);   
-    eth.setIP();
-    //eth.setIP({ip: "192.168.1.110", subnet: "255.255.255.0", gateway: "192.168.1.1", dns: "8.8.8.8"});       
-    var addr = eth.getIP();
-    console.log(addr);
-	*/
-}
-
-// start RFID listening
-function startRFIDListening() {
-	// обработка взаимодействия с RFID меткой
-	nfc.on('tag', function(error, data) {
-		if (error) {
-			print('tag read error');
-		} else {
-			buffer = [];
-			console.log(' ========================================= ');
-			//console.log('UID::' + data.uid);
-			uidToSend = processUidToSend(data.uid);
-			// console.log('UID in HEX::' + uidToSend);
-			// Request to GloLime for get Balance value
-            if (isVendDone){
-                sendMsgToGloLime(0x01, frameId, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
-                frameId++;
-                userIdLittleEndian = [];
-            }
-		}
-		// каждые 1000 миллисекунд слушаем новую метку
-		setTimeout(function () {
-			nfc.listen();
-		}, 1000);
-	});
 }
 
 function makeCmdDataToGetBalance(cardType, cardUid){
@@ -316,7 +219,7 @@ function makeGloLimeRespArray (_addr, _frameId, _cmdCode, cmdData){
 	var checksum = crc16_ccitt(array);
 
     // bytestuffing
-    array_bf = bytestuffToPesp(array);
+    array_bf = bytestuffToResp(array);
     //console.log('array_bf  ' + array_bf);
 
     // добавить CRC
@@ -342,7 +245,7 @@ function addPrePostAmble(array){
     return result;
 }
 
-function bytestuffToPesp(array){
+function bytestuffToResp(array){
   var result = [];
   for (var i = 0; i < array.length; i++){
     switch(array[i]){
@@ -363,6 +266,7 @@ function bytestuffToPesp(array){
   return result;
 }
 
+var HOST = "192.168.0.2";
 // to make and send message - request - to GloLime by socket 
 function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
     var msg = [], msg_str = "";
@@ -374,7 +278,7 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
         msg_str += msg[i];
     }
     //console.log('MSG STR:: ' + msg_str);
-    client.connect({host: "192.168.91.80", port: 6767},  function(socket) {
+    client.connect({host: HOST, port: 6767},  function(socket) {
         console.log('Client connected');
         console.log('REQUEST :: ' + _getHexStr(msg));
         var s = "";
@@ -401,7 +305,7 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
 			var isComplete = false;
 			for(var i = 0; i < data.length; i++)
 			{
-			  putByte(data.charCodeAt(i), null);
+              putByte(data.charCodeAt(i), null);
 			}
 		});
 		socket.on('close',function(){
@@ -442,9 +346,11 @@ function processGloLimeResponse(resp){
             //console.log(' :: userId -> ' + userId);
             var tempBalance = buffer.slice(9,13);
             console.log(' :: tempBalance -> ' + tempBalance);
+            userType = buffer.slice(8,9);
+            console.log(' :: userType -> ' + userType);
 			// get Balance value in DEC
             numBalance = processLitleEnd(tempBalance);
-		    if(!isNaN(numBalance)) {
+            if(!isNaN(numBalance)) {
               isVendDone = false;       //vend session started
               var balanceToSend = numBalance.toString(10)+"\n";
               console.log("  :: balanceToSend -> " + balanceToSend);
@@ -529,34 +435,40 @@ function makeCmdDataToGetBalance(cardType, cardUid){
     return data;
 }
 
+//params -> array in little endian
 function makeCmdDataToBuy(_userId, _productId, _productPrice){
-    //console.log(' Product ID ' + _productId);
-    //console.log(' User ID ' + _userId);
     var proIdToSend = [];
-    proIdToSend[0] = _productId[1];
-    proIdToSend[1] = _productId[0];
+    proIdToSend[0] = _productId[0];
+    proIdToSend[1] = _productId[1];    
     proIdToSend[2] = 0x00;
     proIdToSend[3] = 0x00;
     var prodPriceToSend = [];
-    prodPriceToSend[0] = _productPrice[1];
-    prodPriceToSend[1] = _productPrice[0];
+    prodPriceToSend[0] = _productPrice[0];
+    prodPriceToSend[1] = _productPrice[1];
     prodPriceToSend[2] = 0x00;
     prodPriceToSend[3] = 0x00;    
     return (_userId.concat(proIdToSend).concat(prodPriceToSend));
 }
 
 function processUidToSend(uid){
-    var str = "", result = [];
+    var str = "", result = [], temp = "";
+    console.log(uid);
     for (var i = 0; i < uid.length; i++)
     {
-        str += uid[i].toString(16);
+        temp = uid[i].toString(16);
+        if (temp.length < 2){
+            temp = "0" + temp;
+        }
+        str += temp;
     }
-    //console.log('uid in str::  ' + str);
+    console.log('uid in str::  ' + str);
     for (var j = 0; j < str.length; j++)
     {
         result[j] = str.charCodeAt(j);
-    }
+        console.log("result[j] :: " + result[j]);
+    }    
     result[result.length] = 0;
+    console.log("result :: " + result);
     return result;
 }
 
@@ -661,9 +573,38 @@ function Reflect8(val){
     return resByte;
 }
 
+var nfc = null;
+
+// start RFID listening
+function startRFIDListening() {
+	// обработка взаимодействия с RFID меткой
+	nfc.on('tag', function(error, data) {
+		if (error) {
+			print('tag read error');
+		} else {
+			buffer = [];
+			console.log(' ========================================= ');
+			console.log('UID::' + data.uid);
+			uidToSend = processUidToSend(data.uid);
+			console.log('UID in HEX::' + uidToSend);
+			// Request to GloLime for get Balance value
+            if (isVendDone){
+                sendMsgToGloLime(0x01, frameId, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
+                frameId++;
+                userIdLittleEndian = [];
+            }
+		}
+		// каждые 1000 миллисекунд слушаем новую метку
+		setTimeout(function () {
+			nfc.listen();
+		}, 1000);
+	});
+}
 
 var command = '';
 var buffer  = '';
+
+// start Serial4 listening
 function startSerialListening() {
     setInterval(function() {
         var chars = Serial4.available();
@@ -679,25 +620,113 @@ function startSerialListening() {
     }, 5);
 }
 
+// Init functions
+function nfcInit(error){
+  if (error) {
+      print('RFID wake up error', error);
+  } else {
+      print('RFID wake up OK');
+      isRFIDOk = true;
+      console.log('Clear interval RFID...');
+      clearInterval(idRFID);
+      // start peripherial
+      //P13.set();
+      P0.set();
+      nfc.listen();
+      startRFIDListening();
+      startSerialListening();
+  }
+}
+
+function initNfcModule(nfc) {
+    console.log("! Starting NFC module");
+    //nfc.wakeUp(nfcInit);
+    // waiting for RFID wake up
+    idRFID = setInterval(function () {
+      if (!isRFIDOk){
+        // wake up rfid
+        console.log("-> isRFIDOk = " + isRFIDOk);
+        nfc.wakeUp(function(error){
+          if (error) {
+              print('RFID wake up error', error);
+          } else {
+              print('RFID wake up OK');
+              isRFIDOk = true;
+              console.log('Clear interval RFID...');
+              clearInterval(idRFID);
+              // start peripherial
+              //P13.set();
+              P0.set();
+              nfc.listen();
+              startRFIDListening();
+              startSerialListening();
+          }
+        });
+      }
+    }, 5000);
+}
+
+function initPeripherial() {
+    console.log("... initialising Peripherial ... ");
+    // setup serial for MDB transport communication
+    Serial4.setup(115200);
+
+    // setup RFID module
+	I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
+	//nfc = require("nfc").connect({i2c: I2C1, irqPin: P10});
+    nfc = require("nfc").connect({i2c: I2C1, irqPin: P9});
+    // setup WiFi module
+//    Serial2.setup(115200, { rx: A3, tx : A2 });
+//	wifi = require("ESP8266WiFi_0v25");
+
+    // start peripherial initialization
+    /*
+    if(wifi !== 'undefined') {
+        wifi = wifi.connect(Serial2, function(err){
+            if (err) {
+              console.log("Error WiFi module connection");
+              throw err;
+            } else {
+                wifi.reset(function(err){
+                  if (err) {
+                    console.log("Error WiFi module reset");
+                    throw err;
+                  } else {
+                      console.log("Connecting to WiFi");
+                      wifi.connect(ssid, pass, function(err) {
+                        if (err) throw err;
+                        isWiFiOk = true;
+                        console.log("Connected to WiFi");
+                        client = require("net");
+                        console.log('NET-Client = ' + (client == 'underfined'));
+                        clearInterval(idWiFi);
+                        // start NFC module initialization
+                        initNfcModule(nfc);
+                      });
+                  }
+                });
+            }
+        });
+    }
+    */
+    
+    // setup ethernet module
+    console.log("Setup ethernet module");
+    SPI2.setup({mosi:B15, miso:B14, sck:B13});
+    eth = require("WIZnet").connect(SPI2, P10);
+    //eth.setIP();
+    //glolime static IP
+    eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8"});
+    var addr = eth.getIP();
+    console.log(addr);
+    client = require("net");
+    initNfcModule(nfc);
+    
+}
+
+
 //E.on('init', function() {
+    //P13.reset();
+    P0.reset();
     initPeripherial();
-	
-	// waiting for WiFi and NFC wake UP
-	idWiFi = setInterval(function () {
-		if (!isWiFiOk){
-			//// wake up wifi
-			console.log('isWiFiOk :: ' + isWiFiOk);
-			console.log('Try to connect WiFi');
-			if(wifi === undefined) {
-			  console.log('WiFi module undefined');
-			  wifi = require("ESP8266WiFi_0v25");
-			}
-			wifi = wifi.connect(Serial2, wifiInit);
-			// console.log('---'+wifi);
-		}
-	}, 10000);
-	if (idRFID == 'undefined') {
-		startRFIDListening();
-		startSerialListening();
-	}
-//});
+//}
