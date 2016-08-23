@@ -9,8 +9,8 @@
 #define DMA_USART2_Tx_Channel	DMA1_Channel4
 #define DMA_USART2_Rx_Channel	DMA1_Channel5
 
-#define TX_BUFF_LENGH	128
-#define RX_BUFF_LENGH	128
+#define TX_BUFF_LENGH	256
+#define RX_BUFF_LENGH	256
 
 ////////////////////////////////////////////
 // declare peripheral structures
@@ -217,6 +217,7 @@ void USART2_Send_String(const char *str)
 	memset((void*)txbuf, 0, TX_BUFF_LENGH);
 	strcat((char*)txbuf, str);
 	DMA_SetCurrDataCounter(DMA_USART2_Tx_Channel, strlen((void*)txbuf));
+	//DMA_SetCurrDataCounter(DMA_USART2_Tx_Channel, strlen(txbuf));
 	DMA_Cmd(DMA_USART2_Tx_Channel, ENABLE);
 	return;
 }
@@ -264,8 +265,8 @@ void USART2_DMA_Init(void) {
 
 
 int get_user_balance() {
-	int i = 0, k = 0;
-	int val = 0;
+	unsigned int i = 0, k = 0;
+	unsigned int val = 0;
 	char sBalance[RX_BUFF_LENGH];
 
 	DMA_Cmd(DMA_USART2_Rx_Channel, DISABLE);
@@ -284,7 +285,7 @@ int get_user_balance() {
 		}
 
 	}
-	DMA_Cmd(DMA_USART2_Rx_Channel,ENABLE);
+	DMA_Cmd(DMA_USART2_Rx_Channel, ENABLE);
 	val = atoi(sBalance);
 	return val;
 }

@@ -5,6 +5,7 @@
 
 #include "MDBConst.h"
 #include "mdb_helper.h"
+#include "internal_usart_comm.h"
 #include "cashless_protocol.h"
 #include "logger.h"
 
@@ -23,12 +24,16 @@ unsigned short isSessionComplete = 0x00; // false
 
 // VENDING result variable
 unsigned short vend_result_variable = VEND_NOTHING;
+unsigned short vend_attempts_count   = 0;
+unsigned short session_timeout_seconds = 10;
 
 // for success single vend scenario
 char str_item_price[16];
 char str_espr_cmd[23];
 unsigned int item_price  = 0;
 unsigned int cur_balance = 0;
+//temporary
+unsigned char isInfoShown = 0x00;
 
 
 // cashless FSM states
@@ -58,6 +63,7 @@ void process_inactive(unsigned char* data) {
 
 	int cmdId = (int)(data[0] & MASK_CMD);
 	int subCmdId = -1;
+	set_led_state(0x00);
 	switch(cmdId) {
 		case RESET:
 			fill_mbd_command(&resp, resp_ack, 1);
@@ -154,7 +160,7 @@ void process_disabled(unsigned char* data){
 					send_mdb_command(&resp);
 					_cashless_state = ST_ENABLED;
 					// SEND to Espruino
-					send_to_espruino("PWRUP\n", 6);
+					send_enable();
 					//log("(DISABLED)|RECV:READER [reader enable]; SEND: Reader Enable\n");
 				break;
 				case 0x00: // Reader Disable
@@ -183,7 +189,7 @@ void process_disabled(unsigned char* data){
 void process_enabled(unsigned char* data){
 	char resp_ack[1] = {0x00};
 	char resp_just_reset[2] = {0x00, 0x00};
-	char resp_display[34] = {0x02, 100, 0x2E,0x36,0x39,0x3D,0x42,0x14,0x3C,0x35,0x38,0x3D,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14,0x14};
+	char resp_display[34] = {0x02,0x64,0x54,0x4f,0x55,0x43,0x48,0x20,0x43,0x41,0x52,0x44,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0xc1};
 	char result[4] = {0,0,0,0};
 
 	int cmdId =    (int)(data[0] & MASK_CMD);
@@ -198,12 +204,11 @@ void process_enabled(unsigned char* data){
 			log("(ENABLED)|RECV:RESET ; SEND: ACK\n");
 			break;
 		case POLL:
-			cur_balance = read_balance();
+			cur_balance = read_user_balance();
+			//log_recv_amount(cur_balance);
 			if (cur_balance > 0) {  // BEGIN SESSION
-				//switch on session indicator
-				//set_led_state(0x01);
-				//TODO: how we can send balance > 650RUB to VMC?
-				cur_balance = cur_balance > MAX_AMOUNT_VALUE ? MAX_AMOUNT_VALUE : cur_balance;
+				set_led_state(0x01);
+				//cur_balance = cur_balance > MAX_AMOUNT_VALUE ? MAX_AMOUNT_VALUE : cur_balance;
 				getBalanceArray(cur_balance, result);
 				fill_mbd_command(&resp, result, 4);
 				send_mdb_command(&resp);
@@ -211,6 +216,7 @@ void process_enabled(unsigned char* data){
 				vend_result_variable = VEND_NOTHING;
 				fill_mbd_command(&last_cmd, result, 4);
 				_cashless_state = ST_IDLE;
+				//cur_balance = 0;
 				log("(ENABLED)|RECV:POLL ; SEND: BEGIN SESSION\n");
 			} else {
 				// balance is not ready
@@ -251,7 +257,10 @@ void process_session_idle(unsigned char* data){
 	char resp_session_cancel[2] = {0x04,0x04};
 	char resp_end_session[2] = {0x07,0x07};
 
-	int value = 0;
+	//unsigned int time_interval = vend_attempts_count*110;
+	//unsigned int timeout_sec = session_timeout_seconds*1000;
+
+	unsigned int value = 0;
 	int cmdId =    (int)(data[0] & MASK_CMD);
 	int subCmdId = -1;
 	switch (cmdId){
@@ -267,7 +276,8 @@ void process_session_idle(unsigned char* data){
 			subCmdId = (int)data[1];
 			switch(subCmdId) {
 				case 0x00: // Vend Request
-					item_price = ((value | (int)data[2]) << 8) | (int)data[3];  //item price SCALED!!!
+					item_price = ((value | (unsigned int)data[2]) << 8) | (unsigned int)data[3];  //item price SCALED!!!
+					//log_recv_amount(item_price);
 					fill_mbd_command(&resp, resp_ack, 1);
 					send_mdb_command(&resp);
 					_cashless_state = ST_VEND; 
@@ -290,6 +300,13 @@ void process_session_idle(unsigned char* data){
 		case POLL:
 			switch(vend_result_variable) {
 				case VEND_NOTHING:
+					// increment vend timeout counter
+					vend_attempts_count++;
+					if(vend_attempts_count > 35) {
+						vend_result_variable = VEND_CANCEL; //User timeout
+						vend_attempts_count = 0;
+					}
+					//waiting user selection
 					fill_mbd_command(&resp, resp_ack, 1);
 					send_mdb_command(&resp);
 					log("(IDLE)|RECV:POLL; SEND: ACK\n");
@@ -300,9 +317,16 @@ void process_session_idle(unsigned char* data){
 					send_mdb_command(&resp);
 					//lastCmd = [0x04, 0x04];
 					fill_mbd_command(&last_cmd, resp_session_cancel, 2);
-					log("(IDLE)|RECV:POLL; SEND: 0x04 (SESSION CANCEL)\n");
+					_cashless_state = ST_ENABLED;
+					//log("(IDLE)|RECV:POLL; SEND: 0x04 (SESSION CANCEL)\n");
+					//switch off session indicator
+					set_led_state(0x00);
+					send_session_cancel();
 					// Session Cancel => set to zero balance
+					vend_attempts_count = 0;
 					isBalanceReady = 0x00; // false
+					cur_balance = 0;
+					item_price = 0;
 					break;
 				case VEND_SUCCESS:
 					// send End Session
@@ -311,17 +335,15 @@ void process_session_idle(unsigned char* data){
 					// lastCmd = [0x07, 0x07];
 					fill_mbd_command(&last_cmd, resp_end_session, 2);
 					_cashless_state = ST_ENABLED;
-
-					memset(str_item_price, 0x00, 16);
-					memset(str_espr_cmd, 0x00, 23);
-					itoa(item_price, str_item_price);
-					strcat(str_espr_cmd, "PRICE:");
-					strcat(str_espr_cmd, str_item_price);
-					strcat(str_espr_cmd, "\n");
-					send_to_espruino(str_espr_cmd, strlen(str_espr_cmd));
+					// send product information
+					send_vend_info(0, item_price);
 					//switch off session indicator
-					//set_led_state(0x00);
+					set_led_state(0x00);
 					// end Session => set to zero balance
+					vend_attempts_count = 0;
+					isBalanceReady = 0x00; // false
+					cur_balance = 0;
+					item_price = 0;
 					break;
 			}
 		break;
@@ -343,7 +365,6 @@ void process_vend(unsigned char* data){
 			fill_mbd_command(&resp, resp_ack, 1);
 			send_mdb_command(&resp);
 			fill_mbd_command(&delay_cmd, resp_just_reset, 2);
-			// change state to INACTIVE
 			_cashless_state = ST_INACTIVE;
 			log("(VEND)|RECV:RESET ; SEND: ACK\n");
 			break;
@@ -356,7 +377,6 @@ void process_vend(unsigned char* data){
 			commad_to_send[2] = (char)(cur_balance & 0x00FF);
 			chk = calculate_checksum(commad_to_send, 4);
 			commad_to_send[3] = chk;
-
 			// send Vend Approved
 			fill_mbd_command(&resp, commad_to_send, 4);
 			send_mdb_command(&resp);

@@ -7,6 +7,8 @@
 
 #include "MDBConst.h"
 #include "mdb_helper.h"
+#include "internal_usart_comm.h"
+
 #include "cashless_protocol.h"
 
 
@@ -25,9 +27,7 @@ void main(void)
 	initialize_board();
 	CashlessProtocoInit(USART1_Send);
 
-	// notify espruino board about start
-//	delay_ms(250);
-	send_to_espruino("MDB BOARD STARTED\n\0", 15);
+	send_startup();
 
 	// main loop for MDB commands processing
 	while(1)
