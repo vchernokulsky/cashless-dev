@@ -2,7 +2,20 @@ var balance = "";
 var isEnabled = true;
 var isVendDone = true;
 var isSessionTimeout = false;
+
 var chip = "";
+var deviceId = "1";
+var writeoffId = "";
+var successId = 1;
+var srvid = 8633;
+var product_price;
+var product_id;
+
+// 
+var rfidIrqPin = P10; // P9
+var mdbRstPin  = P13;  // P0
+var ethIrqPin  = P1;
+var wifiRstPin = A4;  //??
 
 var SPORTLIFE_HOST = "sync.sportlifeclub.ru";
 //var SPORTLIFE_HOST = "172.16.0.68";
@@ -27,17 +40,17 @@ function logger(msg) {
 }
 
 // REST: GetState error responses
-var ERR_CHIP_NUM = "ErrInvalidChipNum";
+var ERR_CHIP_NUM          = "ErrInvalidChipNum";
 var ERR_UNEXPECTED_RESULT = "ErrInvalidResult";
-var ERR_DEV_NAME = "ErrInvalidDeviceName";
-var ERR_DEV_NOT_FOUND = "ErrDeviceOrClubNotFound";
-var ERR_CHIP_NOT_FOUND = "ErrChipNotFound";
-var ERR_CHIP_NOT_REG = "ErrChipNotRegistered";
-function getBalance(chipUid) {
+var ERR_DEV_NAME          = "ErrInvalidDeviceName";
+var ERR_DEV_NOT_FOUND     = "ErrDeviceOrClubNotFound";
+var ERR_CHIP_NOT_FOUND    = "ErrChipNotFound";
+var ERR_CHIP_NOT_REG      = "ErrChipNotRegistered";
+function getBalance(chipId, devId) {
   balance = "";
   var numBalance = 0;
   //TODO: read chip id from RFID
-  var content = "chip="+chipUid;
+  var content = "chip="+chipId+"&dev="+devId;
   var options = {
 	host: SPORTLIFE_HOST,
 	port: '60080',
@@ -69,16 +82,8 @@ function getBalance(chipUid) {
           LED1.set();
           Serial4.write("3000\n");  //fixed balance for SportLife (30RUB)
           logger("Send 30RUB to nucleo");
-          // start timer for VEND session
-          isSessionTimeout = true;
-          setTimeout(function(){
-            if(isSessionTimeout) {
-                logger("SESSION TIMED OUT");
-                isVendDone = true;   //vend session closed
-                isSessionTimeout = false;
-                LED1.reset();
-            }
-          }, 40000);
+          product_price = "3000";
+          setBalance(deviceId, chip, srvid, product_price);
         }
       } else {
         logger("Recieved incorrect data");
@@ -87,13 +92,13 @@ function getBalance(chipUid) {
   }).end(content);
 }
 
-// REST: WriteOff error responses
-function setBalance(chip, srvid, price) {
-  var content = "dev=1" + "&chip=" + chip + "&srvid=" + srvid + "&price=" + price;
+// REST: WriteOffV2 error responses
+function setBalance(devId, chip, srvid, price) {
+  var content = "dev=" + devId + "&chip=" + chip + "&srvid=" + srvid + "&price=" + price;
   var options = {
 	host: SPORTLIFE_HOST,
 	port: '60080',
-    path: '/slsrv/chip/writeoff',
+    path: '/slsrv/chip/writeoffv2',
     protocol: "http:",
     method: "POST",
     headers: {
@@ -104,6 +109,39 @@ function setBalance(chip, srvid, price) {
   logger('Connecting to Server ... ');
   var http = require("http");
   http.request(options, function(res) {
+    logger('Connected to Server');
+    var nRecv = 0;
+    var Resp = "";
+    res.on('data', function(data) {
+      nRecv += data.length;
+      Resp += data;
+    });
+    res.on('close',function(data) {
+      writeoffId = Resp;
+      logger("Server connection closed, " + nRecv + " bytes received.");
+      logger("Response: " + Resp);
+    });
+  }).end(content);
+}
+
+function writeoffCommit (chip, devId, writeoffId, success) {
+  logger(' ... WriteOff Commit ... ');
+  var content = "dev="+devId+"&chip="+chip+"&writeoffid="+writeoffId+"&success="+success;
+  var options = {
+	host: SPORTLIFE_HOST,
+	port: '60080',
+    path: '/slsrv/chip/writeoffcommit',
+    protocol: "http:",
+    method: "POST",
+    headers: {
+      "Content-Type":"application/x-www-form-urlencoded",
+      "Content-Length":content.length
+    }
+  };
+  logger('Connectiong to Server ... ');
+  var http = require("http");
+  http.request(options, function(res) {
+    console.log("Request content: " + content);
     logger('Connected to Server');
     var nRecv = 0;
     var Resp = "";
@@ -137,18 +175,22 @@ function processTransportLayerCmd(cmd) {
         logger('DISABLE received');
         break;
       case 'VEND':          //VEND:<PRODUCT ID>:<PRODUCT PRICE>
-        srvid = 8633;
         product_id = array[1];
         product_price = array[2];
-        //send balance to SportLife server
+        //send writeoffCommit to SportLife server
         isVendDone = true;
-        isSessionTimeout = false;
         LED1.reset();
-        logger('VEND INFO | PRODUCT ID: ' + product_price + '   PRODUCT PRICE: ' + parseInt(product_price, 10)/100);
-        setBalance(chip, srvid, price);
+        logger('VEND INFO | PRODUCT ID: ' + product_id + '   PRODUCT PRICE: ' + parseInt(product_price, 10)/100);
+        //setBalance(chip, srvid, price);
+        // код завершения операции/продажи: 1 - успешно
+        successId  = 1; 
+        writeoffCommit(chip, deviceId, writeoffId, successId);
         break;
       case 'CANCEL':          //RESET
+        LED1.reset();
         isVendDone = true;
+        successId  = 5; 
+        writeoffCommit(chip, deviceId, writeoffId, successId);
         logger('CANCEL recieved');
         break;
       default:
@@ -160,7 +202,7 @@ function processTransportLayerCmd(cmd) {
 var nfc = null;
 function initPeripherial() {
     // init nucleo state
-    // P0.reset();
+    mdbRstPin.reset();
     
     // setup USART interfaces
     //Serial2.setup(115200);   //logger serial port    
@@ -170,7 +212,7 @@ function initPeripherial() {
     /*
     logger("Setup ethernet module");
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
-    eth = require("WIZnet").connect(SPI2, P10);   
+    eth = require("WIZnet").connect(SPI2, ethIrqPin);   
     //eth.setIP({ip:"172.16.9.160", subnet:"255.255.0.0", gateway:"172.16.0.2", dns:"172.16.0.2"});
     eth.setIP();
     var addr = eth.getIP();
@@ -179,13 +221,13 @@ function initPeripherial() {
     
     // setup RFID module
     I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
-    nfc = require("nfc").connect({i2c: I2C1, irqPin: P9});
+    nfc = require("nfc").connect({i2c: I2C1, irqPin: rfidIrqPin});
     nfc.wakeUp(function(error) {
       if (error) {
         logger('RFID wake up error', error);
       } else {
         logger('RFID wake up OK');
-        //P0.set();
+        mdbRstPin.set();
         nfc.listen();
       }
     });
@@ -241,7 +283,7 @@ function readChipIdFromRFID(uid, keyData, block, callback) {
         }
         // try to get balance from server
         if (typeof callback === 'function') {
-          callback(chip);
+          callback(chip, deviceId);
         }
       });
     }
