@@ -725,8 +725,8 @@ function initPeripherial() {
 }
 
 
-//E.on('init', function() {
+E.on('init', function() {
     //P13.reset();
     P0.reset();
     initPeripherial();
-//}
+});
