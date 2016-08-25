@@ -42,3 +42,4 @@ _PoC/GloLimeSvr/
 _PoC/VendingTest/
 _PoC/stm32_timer/Timer.c
 src/mic/MDBAdapter/settings/MDBAdapterSTM32F042.dni
+_PoC/SLSrvTest/
