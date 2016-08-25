@@ -28,9 +28,8 @@ unsigned short vend_attempts_count   = 0;
 unsigned short session_timeout_seconds = 10;
 
 // for success single vend scenario
-char str_item_price[16];
-char str_espr_cmd[23];
 unsigned int item_price  = 0;
+unsigned int item_id     = 0;
 unsigned int cur_balance = 0;
 //temporary
 unsigned char isInfoShown = 0x00;
@@ -261,6 +260,7 @@ void process_session_idle(unsigned char* data){
 	//unsigned int timeout_sec = session_timeout_seconds*1000;
 
 	unsigned int value = 0;
+	unsigned int value1 = 0;
 	int cmdId =    (int)(data[0] & MASK_CMD);
 	int subCmdId = -1;
 	switch (cmdId){
@@ -277,6 +277,7 @@ void process_session_idle(unsigned char* data){
 			switch(subCmdId) {
 				case 0x00: // Vend Request
 					item_price = ((value | (unsigned int)data[2]) << 8) | (unsigned int)data[3];  //item price SCALED!!!
+					item_id   = ((value1 | (unsigned int)data[4]) << 8) | (unsigned int)data[5];  //item number
 					//log_recv_amount(item_price);
 					fill_mbd_command(&resp, resp_ack, 1);
 					send_mdb_command(&resp);
@@ -327,6 +328,7 @@ void process_session_idle(unsigned char* data){
 					isBalanceReady = 0x00; // false
 					cur_balance = 0;
 					item_price = 0;
+					item_id = 0;
 					break;
 				case VEND_SUCCESS:
 					// send End Session
@@ -336,7 +338,7 @@ void process_session_idle(unsigned char* data){
 					fill_mbd_command(&last_cmd, resp_end_session, 2);
 					_cashless_state = ST_ENABLED;
 					// send product information
-					send_vend_info(0, item_price);
+					send_vend_info(item_id, item_price);
 					//switch off session indicator
 					set_led_state(0x00);
 					// end Session => set to zero balance
@@ -344,6 +346,7 @@ void process_session_idle(unsigned char* data){
 					isBalanceReady = 0x00; // false
 					cur_balance = 0;
 					item_price = 0;
+					item_id = 0;
 					break;
 			}
 		break;
