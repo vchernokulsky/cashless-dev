@@ -33,6 +33,9 @@ var pass = "vendex2016";
 // var ssid = "SauronAP";
 // var pass = "yuwb3795";
 
+// buffer for writeoffCommit
+var writeoffQueue = [];
+
 
 function logger(msg) {
     console.log(msg);
@@ -156,6 +159,11 @@ function writeoffCommit (chip, devId, writeoffId, success) {
   }).end(content);
 }
 
+function addToWriteoffQueue(chip, writeoffId, _successId){
+    var contentToQueue = "dev="+deviceId+"&chip="+chip+"&writeoffid="+writeoffId+"&success="+_successId;
+    writeoffQueue[writeoffQueue.length] = contentToQueue;
+}
+
 var PREFIX_LEN = 5;
 function processTransportLayerCmd(cmd) {
     //var prefix = cmd.substr(0, PREFIX_LEN);
@@ -184,6 +192,7 @@ function processTransportLayerCmd(cmd) {
         //setBalance(chip, srvid, price);
         // код завершения операции/продажи: 1 - успешно
         successId  = 1; 
+        
         writeoffCommit(chip, deviceId, writeoffId, successId);
         break;
       case 'CANCEL':          //RESET
