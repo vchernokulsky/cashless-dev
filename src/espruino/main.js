@@ -11,7 +11,7 @@ var srvid = 8633;
 var product_price;
 var product_id;
 
-// 
+//
 var rfidIrqPin = P10; // P9
 var mdbRstPin  = P13;  // P0
 var ethIrqPin  = P1;
@@ -34,8 +34,11 @@ var pass = "vendex2016";
 // var pass = "yuwb3795";
 
 // buffer for writeoffCommit
-var writeoffQueue = [];
+var writeoffQueueChips = [];
+var writeoffQueueIDs   = [];
+var writeoffQueueScsIDs = [];
 
+var intervalIdWriteoffQueue;
 
 function logger(msg) {
     console.log(msg);
@@ -75,22 +78,20 @@ function getBalance(chipId, devId) {
       balance += data;
     });
     res.on('close',function(data) {
-      logger("Server connection closed, " + nRecv + " bytes received.");
-      logger("Response: " + balance);
-      // send balance to MDB transport
-      numBalance = parseInt(balance, 10);
-      if(!isNaN(numBalance)) {
-        if((numBalance/100) > 30) { //user can start vend operation
-          isVendDone = false;       //vend session started
-          LED1.set();
-          Serial4.write("3000\n");  //fixed balance for SportLife (30RUB)
-          logger("Send 30RUB to nucleo");
-          product_price = "3000";
-          setBalance(deviceId, chip, srvid, product_price);
-        }
-      } else {
-        logger("Recieved incorrect data");
-      }
+		logger("Server connection closed, " + nRecv + " bytes received.");
+		logger("Response: " + balance);
+		// send balance to MDB transport
+		numBalance = parseInt(balance, 10);
+			if(!isNaN(numBalance)) {
+				if((numBalance/100) > 30) { //user can start vend operation
+					isVendDone = false;       //vend session started
+					LED1.set();
+					product_price = "3000";
+					setBalance(deviceId, chip, srvid, product_price);
+				}
+			} else {
+				logger("Recieved incorrect data");
+			}
     });
   }).end(content);
 }
@@ -116,20 +117,32 @@ function setBalance(devId, chip, srvid, price) {
     var nRecv = 0;
     var Resp = "";
     res.on('data', function(data) {
-      nRecv += data.length;
-      Resp += data;
+		nRecv += data.length;
+		Resp += data;
     });
     res.on('close',function(data) {
-      writeoffId = Resp;
-      logger("Server connection closed, " + nRecv + " bytes received.");
-      logger("Response: " + Resp);
+		writeoffId = Resp;
+		if (parseInt(writeoffId,10) > 0 ){
+			Serial4.write("3000\n");  //fixed balance for SportLife (30RUB)
+			logger("Send 30RUB to nucleo");
+		} else {
+			logger("WriteOffId <= 0");
+		}
+		logger("Server connection closed, " + nRecv + " bytes received.");
+		logger("Response: " + writeoffId);
     });
   }).end(content);
 }
 
-function writeoffCommit (content/*chip, devId, writeoffId, success*/) {
+/*
+function writeoffCommit (chip, writeoffId, success) {
   logger(' ... WriteOff Commit ... ');
-  //var content = "dev="+devId+"&chip="+chip+"&writeoffid="+writeoffId+"&success="+success;
+  var content =
+      "dev="+deviceId+
+      "&chip="+chip+
+      "&writeoffid="+writeoffId+
+      "&success="+success;
+  logger("contentToSend :: " + content);
   var options = {
 	host: SPORTLIFE_HOST,
 	port: '60080',
@@ -151,6 +164,7 @@ function writeoffCommit (content/*chip, devId, writeoffId, success*/) {
     res.on('data', function(data) {
       nRecv += data.length;
       Resp += data;
+      //logger("Response: " + Resp);
     });
     res.on('close',function(data) {
       logger("Server connection closed, " + nRecv + " bytes received.");
@@ -158,13 +172,54 @@ function writeoffCommit (content/*chip, devId, writeoffId, success*/) {
     });
   }).end(content);
 }
+*/
 
-function addToWriteoffQueue(chip, writeoffId, _successId){
-    var contentToQueue = "dev="+deviceId+"&chip="+chip+"&writeoffid="+writeoffId+"&success="+_successId;
-    writeoffQueue[writeoffQueue.length] = contentToQueue;
+function writeOffCommit (sContent) {
+  logger(' ... WriteOff Commit ... ');
+  var content = sContent;
+  if(typeof sContent === 'String') {logger("correct content type");}
+  var options = {
+	host: SPORTLIFE_HOST,
+	port: '60080',
+    path: '/slsrv/chip/writeoffcommit',
+    protocol: "http:",
+    method: "POST",
+    headers: {
+      "Content-Type":"application/x-www-form-urlencoded",
+      "Content-Length":content.length
+    }
+  };
+  logger('Connectiong to Server ... ');
+  var http = require("http");
+  http.request(options, function(res) {
+    console.log("Request content: " + content);
+    logger('Connected to Server');
+    var nRecv = 0;
+    var Resp = "";
+    res.on('data', function(data) {
+      nRecv += data.length;
+      Resp += data;
+      //logger("Response: " + Resp);
+    });
+    res.on('close',function(data) {
+      logger("Server connection closed, " + nRecv + " bytes received.");
+      logger("Response: " + Resp);
+      if(Resp.toLowerCase() == 'ok') {
+        commitQueue.splice(0,1);
+      }
+    });
+  }).end(content);
 }
 
-var PREFIX_LEN = 5;
+function singleBlink(led, timeout){
+	led.set();
+	setTimeout(function(){
+		led.reset();		
+	},timeout);
+}
+
+
+var commitQueue = [];
 function processTransportLayerCmd(cmd) {
     //var prefix = cmd.substr(0, PREFIX_LEN);
     var array = cmd.split(':');
@@ -191,37 +246,30 @@ function processTransportLayerCmd(cmd) {
         logger('VEND INFO | PRODUCT ID: ' + product_id + '   PRODUCT PRICE: ' + parseInt(product_price, 10)/100);
         //setBalance(chip, srvid, price);
         // код завершения операции/продажи: 1 - успешно
-        successId  = 1; 
-        addToWriteoffQueue(chip,writeoffId,successId);
+        successId  = 1;
+		commitQueue[commitQueue.length] =       
+			"dev="+deviceId+
+			"&chip="+chip+
+			"&writeoffid="+writeoffId+
+			"&success="+successId;
+        //writeoffCommit(chip,writeoffId,successId);
         break;
       case 'CANCEL':          //RESET
         LED1.reset();
         isVendDone = true;
         successId  = 5; 
-		addToWriteoffQueue(chip,writeoffId,successId);
+		commitQueue[commitQueue.length] =       
+			"dev="+deviceId+
+			"&chip="+chip+
+			"&writeoffid="+writeoffId+
+			"&success="+successId;
+		//writeoffCommit(chip,writeoffId,successId);
         logger('CANCEL recieved');
         break;
       default:
         //just log message
         logger('LOG: ' + cmd);
     }
-}
-
-function sendWriteoffCommit(){
-	if (writeoffQueue.length > 0){
-		// pop a head of writeoffQueue
-		var contentToReq = writeoffQueue.splice(0,1);
-		// make writeoffCommit
-		writeoffCommit(contentToReq);
-	} else {
-		console.log(" ... Writeoff Queue is empty");
-	}
-}
-
-function processWriteoffQueue(){
-	setInterval(function() {
-		sendWriteoffCommit();
-	}, 5000);
 }
 
 var nfc = null;
@@ -258,6 +306,7 @@ function initPeripherial() {
     });
 
     // setup WiFi module
+    // console.log(" !!! setup wifi");
     Serial2.setup(115200, { rx: A3, tx : A2 });
     var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
       if (err) {
@@ -355,7 +404,16 @@ function startSerialListening() {
 initPeripherial();
 startRFIDListening();
 startSerialListening();
-//sendWriteoffCommit();
+setInterval(function(){
+	if(commitQueue.length > 0) {
+		writeOffCommit(commitQueue[0]);
+	} else {
+		logger("Queue is empty");
+	}
+}, 10000);
+
+//intervalIdWriteoffQueue = setInterval(function() {
+//}, 10000);
 
 /*
 E.on('init', function() {
