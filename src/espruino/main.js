@@ -127,9 +127,9 @@ function setBalance(devId, chip, srvid, price) {
   }).end(content);
 }
 
-function writeoffCommit (chip, devId, writeoffId, success) {
+function writeoffCommit (content/*chip, devId, writeoffId, success*/) {
   logger(' ... WriteOff Commit ... ');
-  var content = "dev="+devId+"&chip="+chip+"&writeoffid="+writeoffId+"&success="+success;
+  //var content = "dev="+devId+"&chip="+chip+"&writeoffid="+writeoffId+"&success="+success;
   var options = {
 	host: SPORTLIFE_HOST,
 	port: '60080',
@@ -192,14 +192,13 @@ function processTransportLayerCmd(cmd) {
         //setBalance(chip, srvid, price);
         // код завершения операции/продажи: 1 - успешно
         successId  = 1; 
-        
-        writeoffCommit(chip, deviceId, writeoffId, successId);
+        addToWriteoffQueue(chip,writeoffId,successId);
         break;
       case 'CANCEL':          //RESET
         LED1.reset();
         isVendDone = true;
         successId  = 5; 
-        writeoffCommit(chip, deviceId, writeoffId, successId);
+		addToWriteoffQueue(chip,writeoffId,successId);
         logger('CANCEL recieved');
         break;
       default:
@@ -208,26 +207,43 @@ function processTransportLayerCmd(cmd) {
     }
 }
 
+function sendWriteoffCommit(){
+	if (writeoffQueue.length > 0){
+		// pop a head of writeoffQueue
+		var contentToReq = writeoffQueue.splice(0,1);
+		// make writeoffCommit
+		writeoffCommit(contentToReq);
+	} else {
+		console.log(" ... Writeoff Queue is empty");
+	}
+}
+
+function processWriteoffQueue(){
+	setInterval(function() {
+		sendWriteoffCommit();
+	}, 5000);
+}
+
 var nfc = null;
 function initPeripherial() {
     // init nucleo state
     mdbRstPin.reset();
-    
+
     // setup USART interfaces
-    //Serial2.setup(115200);   //logger serial port    
+    //Serial2.setup(115200);   //logger serial port
     Serial4.setup(115200);   //MDB transport serial port
-    
+
     // setup ethernet module
     /*
     logger("Setup ethernet module");
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
-    eth = require("WIZnet").connect(SPI2, ethIrqPin);   
+    eth = require("WIZnet").connect(SPI2, ethIrqPin);
     //eth.setIP({ip:"172.16.9.160", subnet:"255.255.0.0", gateway:"172.16.0.2", dns:"172.16.0.2"});
     eth.setIP();
     var addr = eth.getIP();
-    logger(addr.toString());    
+    logger(addr.toString());
     */
-    
+
     // setup RFID module
     I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
     nfc = require("nfc").connect({i2c: I2C1, irqPin: rfidIrqPin});
@@ -240,7 +256,7 @@ function initPeripherial() {
         nfc.listen();
       }
     });
-    
+
     // setup WiFi module
     Serial2.setup(115200, { rx: A3, tx : A2 });
     var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
@@ -339,6 +355,7 @@ function startSerialListening() {
 initPeripherial();
 startRFIDListening();
 startSerialListening();
+//sendWriteoffCommit();
 
 /*
 E.on('init', function() {
