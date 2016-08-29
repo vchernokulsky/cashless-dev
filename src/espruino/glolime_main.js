@@ -61,7 +61,13 @@ var //addr,
 var ERROR_OK                = 0x00,
     ERROR_INVALID_CRC       = 0xFF,
     ERROR_INVALID_COMMAND   = 0xFE,
-    ERROR_INVALID_PARAMETER = 0xFD;
+    ERROR_INVALID_PARAMETER = 0xFD,
+	// additional errors codes
+	ERROR_INSUFFICIENT_FUNDS   = 0xFB, // недостаточно средств на карте для покупки
+	ERROR_NON_EXISTENT_PRODUCT = 0XFA, // несуществующий продукт ??
+	ERROR_NON_EXISTENT_USER    = 0XF9, // несуществующий пользователь
+	ERROR_NON_EXISTENT_SALE    = 0xF8, // несуществующая продажа ??
+	ERROR_NOT_REGISTERED_CARD  = 0xFC; // карта не зарегистрирована в системе 
 
 var crcTable = [0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50a5,
 0x60c6, 0x70e7, 0x8108, 0x9129, 0xa14a, 0xb16b,
@@ -344,59 +350,82 @@ function processGloLimeResponse(resp){
     cmdExitCode = resp[3];
     //console.log(' cmdExitCode' + cmdExitCode);
     switch (cmdExitCode){
-      case ERROR_OK:
-        console.log(' ==> Operation successful');
-        switch (comandCode){
-          case 1:
-            // getBalance command
-            userIdLittleEndian = resp.slice(4,8);
-            userId = processLitleEnd(resp.slice(4,8));
-            //console.log(' :: userId -> ' + userId);
-            var tempBalance = resp.slice(9,13);
-            console.log(' :: tempBalance -> ' + tempBalance);
-            userType = resp.slice(8,9);
-            console.log(' :: userType    -> ' + userType);
-			// get Balance value in DEC
-            numBalance = processLitleEnd(tempBalance);
-            if(!isNaN(numBalance)) {
-              isVendDone = false;       //vend session started
-              var balanceToSend = numBalance.toString(10)+"\n";
-              //console.log("  :: balanceToSend -> " + balanceToSend);
-              Serial4.write(balanceToSend);  
-              // start timer for VEND session
-              //isSessionTimeout = true;          
-              //setTimeout(function(){
-              //  if(isSessionTimeout) {
-              //      console.log("SESSION TIMED OUT");
-              //      isVendDone = true;   //vend session closed
-              //      isSessionTimeout = false;
-              //  }
-              //}, 40000);
-		    } else {
-				console.log("Recieved incorrect data");
+		case ERROR_OK:
+			console.log(' ==> Operation successful');
+			switch (comandCode){
+				case 1:
+				// getBalance command
+				userIdLittleEndian = resp.slice(4,8);
+				userId = processLitleEnd(resp.slice(4,8));
+				//console.log(' :: userId -> ' + userId);
+				var tempBalance = resp.slice(9,13);
+				console.log(' :: tempBalance -> ' + tempBalance);
+				userType = resp.slice(8,9);
+				console.log(' :: userType    -> ' + userType);
+				// get Balance value in DEC
+				numBalance = processLitleEnd(tempBalance);
+				if(!isNaN(numBalance)) {
+					isVendDone = false;       //vend session started
+					var balanceToSend = numBalance.toString(10)+"\n";
+					//console.log("  :: balanceToSend -> " + balanceToSend);
+					Serial4.write(balanceToSend);  
+					// start timer for VEND session
+					//isSessionTimeout = true;          
+					//setTimeout(function(){
+					//  if(isSessionTimeout) {
+					//      console.log("SESSION TIMED OUT");
+					//      isVendDone = true;   //vend session closed
+					//      isSessionTimeout = false;
+					//  }
+					//}, 40000);
+				} else {
+					console.log("Recieved incorrect data");
+				}
+				console.log(' :: numBalance  -> ' + numBalance);
+				break;
+				case 2:
+					// Buy command
+				break;
+				default:
+				break;
 			}
-            console.log(' :: numBalance  -> ' + numBalance);
-            break;
-          case 2:
-            // Buy command
-
-            break;
-          default:
-            break;
-        }
         break;
-      case ERROR_INVALID_CRC:
-        console.log('ERROR: CRC incorrect');
+		case ERROR_INVALID_CRC:
+			console.log('ERROR: CRC incorrect');
         break;
-      case ERROR_INVALID_COMMAND:
-        console.log('ERROR: Cmd incorrect');
+		case ERROR_INVALID_COMMAND:
+			console.log('ERROR: Cmd incorrect');
         break;
-      case ERROR_INVALID_PARAMETER:
-        console.log('ERROR: Cmd parament incorrect');
+		case ERROR_INVALID_PARAMETER:
+			console.log('ERROR: Cmd parament incorrect');
         break;
-      default:
-        console.log('Unknown comand exit code');
-        break;
+		case ERROR_INVALID_CRC:
+			console.log('ERROR: CRC INCORRECT');
+			break;
+		case ERROR_INVALID_COMMAND:
+			console.log('ERROR: CMD INCORRECT');
+			break;
+		case ERROR_INVALID_PARAMETER:
+			console.log('ERROR: CMD PARAMENT INCORRECT');
+			break;
+		case ERROR_INSUFFICIENT_FUNDS:
+			console.log('ERROR: INSUFFICIENT FUNDS ');
+		break;
+		case ERROR_NON_EXISTENT_PRODUCT:
+			console.log('ERROR: PRODUCT IS NON EXISTENT');
+		break;
+		case ERROR_NON_EXISTENT_USER:
+			console.log('ERROR: USER IS NON EXISTENT');
+		break;
+		case ERROR_NON_EXISTENT_SALE:
+			console.log('ERROR: SALE IS NON EXISTENT');
+		break;
+		case ERROR_NOT_REGISTERED_CARD:
+			console.log('ERROR: CARD IS NOT REGISTERED');
+			break;	
+		default:
+			console.log('Unknown comand exit code');
+			break;
     }
   }
 }
