@@ -17,6 +17,8 @@ var pass = "vendex2016";
 // var ssid = "SauronAP";
 // var pass = "yuwb3795";
 
+// P10, P13 - зеленая плата
+// P9, P0 - стенд
 
 var rfidIrqPin = P9; // P10
 var mdbRstPin  = P0;  // P13
@@ -280,7 +282,7 @@ function bytestuffToResp(array){
   return result;
 }
 
-var HOST = "192.168.91.152";
+var HOST = "192.168.0.2";
 // to make and send message - request - to GloLime by socket 
 function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
     var msg = [], msg_str = "";
@@ -753,9 +755,9 @@ function initPeripherial() {
     logger("Setup ethernet module");
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, P10);
-    eth.setIP();
+    //eth.setIP();
     //glolime static IP
-    //eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8"});
+    eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8"});
     var addr = eth.getIP();
     console.log(addr);
     client = require("net");
@@ -765,8 +767,8 @@ function initPeripherial() {
 }
 
 
-//E.on('init', function() {
+E.on('init', function() {
     //P13.reset();
     mdbRstPin.reset();
     initPeripherial();
-//});
+});
