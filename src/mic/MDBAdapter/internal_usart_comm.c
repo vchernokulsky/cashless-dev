@@ -80,3 +80,13 @@ void send_vend_info(unsigned short id, unsigned short price) {
 	send_to_espruino(str_espr_cmd, strlen(str_espr_cmd));
 }
 
+void send_revalue_info(unsigned short amount) {
+	char str_revalue_amount[6];
+	char str_espr_cmd[64];
+	memset(str_revalue_amount, 0x00, 6);
+	memset(str_espr_cmd, 0x00, 6);
+	itoa(amount, str_revalue_amount);
+	strcat(str_espr_cmd, "REVALUE:");
+	strcat(str_espr_cmd, str_revalue_amount);
+	strcat(str_espr_cmd, "\n");
+}
