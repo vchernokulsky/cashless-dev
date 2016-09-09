@@ -40,8 +40,12 @@ unsigned short read_user_balance() {
 #elif defined(__PLATFORM_STM32__)
 	balance = get_user_balance();
 #endif
-	if(balance < 100 || balance > 65000)
+	if(balance < 100) {
 		balance = 0;
+	}
+	else if (balance > 65000) {
+		balance = 65000;
+	}
 	return balance;
 }
 
@@ -80,3 +84,13 @@ void send_vend_info(unsigned short id, unsigned short price) {
 	send_to_espruino(str_espr_cmd, strlen(str_espr_cmd));
 }
 
+void send_revalue_info(unsigned short amount) {
+	char str_revalue_amount[6];
+	char str_espr_cmd[64];
+	memset(str_revalue_amount, 0x00, 6);
+	memset(str_espr_cmd, 0x00, 6);
+	itoa(amount, str_revalue_amount);
+	strcat(str_espr_cmd, "REVALUE:");
+	strcat(str_espr_cmd, str_revalue_amount);
+	strcat(str_espr_cmd, "\n");
+}

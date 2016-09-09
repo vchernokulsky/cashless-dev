@@ -43,3 +43,6 @@ _PoC/VendingTest/
 _PoC/stm32_timer/Timer.c
 src/mic/MDBAdapter/settings/MDBAdapterSTM32F042.dni
 _PoC/SLSrvTest/
+src/mic/MDBAdapter/settings/MDBAdapter_Eclipse Debug.jlink
+src/mic/MDBAdapterSTM32F042/settings/MDBAdapterSTMF042.dni
+src/mic/MDBAdapterSTM32F042/settings/MDBAdapterSTMF042_Eclipse Debug.jlink
