@@ -11,17 +11,22 @@ var srvid = 8633;
 var product_price;
 var product_id;
 
-// P10, P13 - зеленая плата
+// P10, P13, P1 - зеленая плата
 // P9, P0 - стенд
 
 //
-var rfidIrqPin = P9; // P10
-var mdbRstPin  = P0; // P13
-var ethIrqPin  = P10; //B12
+var rfidIrqPin = P10; // P9
+var mdbRstPin  = P13; // P13
+var ethIrqPin  = P1; //B12-стенд_sportlife //P10-стенд //P1-зеленая
+var ethRstPin  = P0;
+var ethCS      = B12;
 var wifiRstPin = A4;  //??
 // Indication funds by LEDs
-var PIN_NOT_ENOUGHT_MONEY = P1; // на карте не достаточно средств
-var PIN_CARD_NOT_REGISTERED = LED1; // карта не зарегистрирована в системе 
+var PIN_NOT_ENOUGHT_MONEY 	= P7; // на карте не достаточно средств
+var PIN_CARD_NOT_REGISTERED = P6; // карта не зарегистрирована в системе 
+var PIN_DEV_READY 			= P5;
+var GPIO4 			   		= P4;
+var GPIO5 			  		= P3;
 
 
 var SPORTLIFE_HOST = "sync.sportlifeclub.ru";
@@ -56,7 +61,6 @@ var ERR_DEV_NAME          = "ErrInvalidDeviceName";
 var ERR_DEV_NOT_FOUND     = "ErrDeviceOrClubNotFound";
 var ERR_CHIP_NOT_FOUND    = "ErrChipNotFound";
 var ERR_CHIP_NOT_REG      = "ErrChipNotRegistered";
-
 
 function getBalance(chipId, devId) {
   balance = "";
@@ -102,10 +106,37 @@ function getBalance(chipId, devId) {
                     logger('ZEROv:: Not enought money!!!');
                 }
 			} else {
-				logger("Recieved incorrect data");
+				processPesponse(balance);
 			}
     });
   }).end(content);
+}
+
+function processPesponse(resp){
+	switch(resp){
+		case ERR_CHIP_NUM:
+			logger("Error:: Invalid Chip Number");
+		break;
+		case ERR_UNEXPECTED_RESULT:
+			logger("Error:: Invalid Result");
+		break;
+		case ERR_DEV_NAME:
+			logger("Error:: Invalid Device Name");
+		break;
+		case ERR_DEV_NOT_FOUND:
+			logger("Error:: Device Or Club Not Found");
+		break;
+		case ERR_CHIP_NOT_FOUND:
+			logger("Error:: Chip Not Found");
+		break;
+		case ERR_CHIP_NOT_REG:
+			logger("Error:: Chip Not Registered");
+			singleBlink(PIN_CARD_NOT_REGISTERED, 5000);
+		break;
+		default:
+			logger("Unknown Error HTTP-response");
+		break;
+	}
 }
 
 // REST: WriteOffV2 error responses
@@ -358,9 +389,11 @@ function startSerialListening() {
 }
 
 var nfc = null;
+//,	eth = null;
 function initPeripherial() {
     // init nucleo state
     mdbRstPin.reset();
+	PIN_DEV_READY.reset();
 	logger('mdbRstPin RESET');
 
     // setup USART interfaces
@@ -370,12 +403,15 @@ function initPeripherial() {
     // setup ethernet module
     /**/
     logger("Setup ethernet module");
+    ethRstPin.set();
+    ethIrqPin.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
-    eth = require("WIZnet").connect(SPI2, ethIrqPin);
+    eth = require("WIZnet").connect(SPI2, ethCS);
     //eth.setIP(SPORTLIFE_STATIC_ADDR);
     eth.setIP();
     var addr = eth.getIP();
     logger(addr);
+    logger("Ethernet module OK");
     /**/
   
     // setup RFID module
@@ -389,34 +425,11 @@ function initPeripherial() {
 		setTimeout(function(){
 			mdbRstPin.set();
 			logger('mdbRstPin SET');
+			PIN_DEV_READY.set();
 		},12000);
         nfc.listen();
       }
     });
-
-    // setup WiFi module
-    // console.log(" !!! setup wifi");
-	/* 
-    Serial2.setup(115200, { rx: A3, tx : A2 });
-    var wifi = require("ESP8266WiFi_0v25").connect(Serial2, function(err) {
-      if (err) {
-        logger("Error WiFi module connection");
-        throw err;
-      } else {
-          wifi.reset(function(err) {
-            if (err) {
-                logger("Error WiFi module reset");
-                throw err;
-            }
-            logger("Connecting to WiFi");
-            wifi.connect(ssid, pass, function(err) {
-              if (err) throw err;
-              logger("Connected");
-            });
-          });
-      }
-    });
-	/**/
 }
 
 initPeripherial();
