@@ -20,9 +20,11 @@ var pass = "vendex2016";
 // P10, P13 - зеленая плата
 // P9, P0 - стенд
 
-var rfidIrqPin = P9; // P10
-var mdbRstPin  = P0;  // P13
+var rfidIrqPin = P10; // P10
+var mdbRstPin  = P13;  // P13
+var ethRstPin  = P0;
 var ethIrqPin  = P1;
+var ethCS      = B12;
 var wifiRstPin = A4;  //??
 
 // ---------------------------------------------------------------
@@ -282,18 +284,18 @@ function bytestuffToResp(array){
   return result;
 }
 
-var HOST = "192.168.0.2";
+var HOST = "192.168.10.147";
 // to make and send message - request - to GloLime by socket 
 function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
     var msg = [], msg_str = "";
-    //console.log('CmdData:: ' + cmdData);
+    //console.log('CmdData    :: ' + cmdData);
     msg = makeGloLimeRespArray(address, _frameId, comandCode, cmdData);
     //console.log('MSG array:: ' + msg);
     for (var i = 0; i < msg.length; i++)
     {
         msg_str += msg[i];
     }
-    //console.log('MSG STR:: ' + msg_str);
+    //console.log('MSG STR   :: ' + msg_str);
     client.connect({host: HOST, port: 6767},  function(socket) {
         console.log('Client connected');
         console.log('REQUEST :: ' + _getHexStr(msg));
@@ -670,7 +672,7 @@ function nfcInit(error){
       clearInterval(idRFID);
       // start peripherial
       //P13.set();
-      mdbRstPin.set();
+      //mdbRstPin.set();
       nfc.listen();
       startRFIDListening();
       startSerialListening();
@@ -695,7 +697,7 @@ function initNfcModule(nfc) {
               clearInterval(idRFID);
               // start peripherial
               //P13.set();
-              mdbRstPin.set();
+              //mdbRstPin.set();
               nfc.listen();
               startRFIDListening();
               startSerialListening();
@@ -707,6 +709,9 @@ function initNfcModule(nfc) {
 
 function initPeripherial() {
     console.log("... initialising Peripherial ... ");
+    mdbRstPin.reset();
+    logger("MDB reset");
+
     // setup serial for MDB transport communication
     Serial4.setup(115200);
 
@@ -714,61 +719,30 @@ function initPeripherial() {
 	I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
 	//nfc = require("nfc").connect({i2c: I2C1, irqPin: P10});
     nfc = require("nfc").connect({i2c: I2C1, irqPin: rfidIrqPin});
-    // setup WiFi module
-	/*
-	Serial2.setup(115200, { rx: A3, tx : A2 });
-	wifi = require("ESP8266WiFi_0v25");
 
-    // start peripherial initialization
-    
-    if(wifi !== 'undefined') {
-        wifi = wifi.connect(Serial2, function(err){
-            if (err) {
-              logger("Error WiFi module connection");
-              throw err;
-            } else {
-                wifi.reset(function(err){
-                  if (err) {
-                    logger("Error WiFi module reset");
-                    throw err;
-                  } else {
-                      logger("Connecting to WiFi");
-                      wifi.connect(ssid, pass, function(err) {
-                        if (err) throw err;
-                        isWiFiOk = true;
-                        logger("Connected to WiFi");
-                        client = require("net");
-                        //logger('NET-Client = ' + (client == 'underfined'));
-                        clearInterval(idWiFi);
-                        // start NFC module initialization
-                        initNfcModule(nfc);
-                      });
-                  }
-                });
-            }
-        });
-    }
-    /**/
-    
     // setup ethernet module
 	/**/
     logger("Setup ethernet module");
+    ethRstPin.set();
+    ethIrqPin.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
-    eth = require("WIZnet").connect(SPI2, P10);
-    //eth.setIP();
+    eth = require("WIZnet").connect(SPI2, ethCS);
+    eth.setIP();
     //glolime static IP
-    eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8"});
+    //eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8"});
     var addr = eth.getIP();
     console.log(addr);
     client = require("net");
+	logger(client);
     initNfcModule(nfc);
-	/**/
-    
+    setTimeout(function(){
+        mdbRstPin.set();
+        logger('MDB SET');
+	},12000);
 }
 
 
-E.on('init', function() {
+//E.on('init', function() {
     //P13.reset();
-    mdbRstPin.reset();
     initPeripherial();
-});
+//});
