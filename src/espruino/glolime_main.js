@@ -20,12 +20,20 @@ var pass = "vendex2016";
 // P10, P13 - зеленая плата
 // P9, P0 - стенд
 
-var rfidIrqPin = P10; // P10
-var mdbRstPin  = P13;  // P13
-var ethRstPin  = P0;
-var ethIrqPin  = P1;
-var ethCS      = B12;
-var wifiRstPin = A4;  //??
+var PIN_RFID_IRQ = P10; // P10
+var PIN_MDB_RST  = P13;  // P13
+var PIN_ETH_IRQ  = P1;
+var PIN_ETH_RST  = P0;
+var PIN_ETH_CS   = B12;
+var PIN_WIFI_RST = A4;  //??
+
+// Indication funds by LEDs
+var PIN_NOT_ENOUGHT_MONEY   = P7; // на карте не достаточно средств
+var PIN_CARD_NOT_REGISTERED = P6; // карта не зарегистрирована в системе 
+var PIN_DEV_READY           = P5;
+var GPIO4                   = P4;
+var GPIO5                   = P3;
+
 
 // ---------------------------------------------------------------
 // -- begin variables for <cmd parser>
@@ -67,7 +75,7 @@ var ERROR_OK                = 0x00,
     ERROR_INVALID_COMMAND   = 0xFE,
     ERROR_INVALID_PARAMETER = 0xFD,
 	// additional errors codes
-	ERROR_INSUFFICIENT_FUNDS   = 0xFB, // недостаточно средств на карте для покупки
+	ERROR_INSUFFICIENT_FUNDS   = 0xFB, // недостаточно средств 
 	ERROR_NON_EXISTENT_PRODUCT = 0XFA, // несуществующий продукт ??
 	ERROR_NON_EXISTENT_USER    = 0XF9, // несуществующий пользователь
 	ERROR_NON_EXISTENT_SALE    = 0xF8, // несуществующая продажа ??
@@ -152,7 +160,12 @@ var isWiFiOk  = false;
 var idWiFi, idRFID;
 // ---------------------------------------------------------------
 
-
+function singleBlink(led, timeout){
+	led.set();
+	setTimeout(function(){
+		led.reset();
+	},timeout);
+}
 
 function uintToByteArray(/*long*/long) {
     // we want to represent the input as a 8-bytes array
@@ -334,104 +347,107 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
 }
 
 function processGloLimeResponse(resp){
-  var cmdExitCode, comandCode, numBalance;
-  comandCode = resp[2];
-  console.log('RESPONSE:: ' + _getHexStr(resp));
-  if (checkCRC16_CCITT(resp)){
-    switch (comandCode){
-        case 0x01:
-          // get Balance command
-          console.log(' ==> Process resp on | GetBalance | cmd ');
-          break;
-        case 0x02:
-          // Buy command
-          console.log(' ==> Process resp on | makeBuy | cmd ');
-          break;
-        default:
-          console.log(' ==> Cmd code in GloLimeResp unknown ');
-          break;
-    }
-    cmdExitCode = resp[3];
-    //console.log(' cmdExitCode' + cmdExitCode);
-    switch (cmdExitCode){
-		case ERROR_OK:
-			console.log(' ==> Operation successful');
-			switch (comandCode){
-				case 1:
-				// getBalance command
-				userIdLittleEndian = resp.slice(4,8);
-				userId = processLitleEnd(resp.slice(4,8));
-				//console.log(' :: userId -> ' + userId);
-				var tempBalance = resp.slice(9,13);
-				console.log(' :: tempBalance -> ' + tempBalance);
-				userType = resp.slice(8,9);
-				console.log(' :: userType    -> ' + userType);
-				// get Balance value in DEC
-				numBalance = processLitleEnd(tempBalance);
-				if(!isNaN(numBalance)) {
-					isVendDone = false;       //vend session started
-					var balanceToSend = numBalance.toString(10)+"\n";
-					//console.log("  :: balanceToSend -> " + balanceToSend);
-					Serial4.write(balanceToSend);  
-					// start timer for VEND session
-					//isSessionTimeout = true;          
-					//setTimeout(function(){
-					//  if(isSessionTimeout) {
-					//      console.log("SESSION TIMED OUT");
-					//      isVendDone = true;   //vend session closed
-					//      isSessionTimeout = false;
-					//  }
-					//}, 40000);
-				} else {
-					console.log("Recieved incorrect data");
+	var cmdExitCode, comandCode, numBalance;
+	comandCode = resp[2];
+	console.log('RESPONSE:: ' + _getHexStr(resp));
+	if (checkCRC16_CCITT(resp)){
+		switch (comandCode){
+			case 0x01:
+			  // get Balance command
+			  console.log(' ==> Process resp on | GetBalance | cmd ');
+			  break;
+			case 0x02:
+			  // Buy command
+			  console.log(' ==> Process resp on | makeBuy | cmd ');
+			  break;
+			default:
+			  console.log(' ==> Cmd code in GloLimeResp unknown ');
+			  break;
+		}
+		cmdExitCode = resp[3];
+		//console.log(' cmdExitCode' + cmdExitCode);
+		switch (cmdExitCode){
+			case ERROR_OK:
+				console.log(' ==> Operation successful');
+				switch (comandCode){
+					case 1:
+						// getBalance command
+						userIdLittleEndian = resp.slice(4,8);
+						userId = processLitleEnd(resp.slice(4,8));
+						//console.log(' :: userId -> ' + userId);
+						var tempBalance = resp.slice(9,13);
+						console.log(' :: tempBalance -> ' + tempBalance);
+						userType = resp.slice(8,9);
+						console.log(' :: userType    -> ' + userType);
+						// get Balance value in DEC
+						numBalance = processLitleEnd(tempBalance);
+						if(!isNaN(numBalance)) {
+							isVendDone = false;       //vend session started
+							var balanceToSend = numBalance.toString(10)+"\n";
+							//console.log("  :: balanceToSend -> " + balanceToSend);
+							Serial4.write(balanceToSend);  
+							// start timer for VEND session
+							//isSessionTimeout = true;          
+							//setTimeout(function(){
+							//  if(isSessionTimeout) {
+							//      console.log("SESSION TIMED OUT");
+							//      isVendDone = true;   //vend session closed
+							//      isSessionTimeout = false;
+							//  }
+							//}, 40000);
+						} else {
+							console.log("Recieved incorrect data");
+						}
+						console.log(' :: numBalance  -> ' + numBalance);
+					break;
+					case 2:
+						// Buy command
+					break;
+					default:
+						
+					break;
 				}
-				console.log(' :: numBalance  -> ' + numBalance);
-				break;
-				case 2:
-					// Buy command
-				break;
-				default:
-				break;
-			}
-        break;
-		case ERROR_INVALID_CRC:
-			console.log('ERROR: CRC incorrect');
-        break;
-		case ERROR_INVALID_COMMAND:
-			console.log('ERROR: Cmd incorrect');
-        break;
-		case ERROR_INVALID_PARAMETER:
-			console.log('ERROR: Cmd parament incorrect');
-        break;
-		case ERROR_INVALID_CRC:
-			console.log('ERROR: CRC INCORRECT');
 			break;
-		case ERROR_INVALID_COMMAND:
-			console.log('ERROR: CMD INCORRECT');
+			case ERROR_INVALID_CRC:
+				console.log('ERROR: CRC incorrect');
 			break;
-		case ERROR_INVALID_PARAMETER:
-			console.log('ERROR: CMD PARAMENT INCORRECT');
+			case ERROR_INVALID_COMMAND:
+				console.log('ERROR: Cmd incorrect');
 			break;
-		case ERROR_INSUFFICIENT_FUNDS:
-			console.log('ERROR: INSUFFICIENT FUNDS ');
-		break;
-		case ERROR_NON_EXISTENT_PRODUCT:
-			console.log('ERROR: PRODUCT IS NON EXISTENT');
-		break;
-		case ERROR_NON_EXISTENT_USER:
-			console.log('ERROR: USER IS NON EXISTENT');
-		break;
-		case ERROR_NON_EXISTENT_SALE:
-			console.log('ERROR: SALE IS NON EXISTENT');
-		break;
-		case ERROR_NOT_REGISTERED_CARD:
-			console.log('ERROR: CARD IS NOT REGISTERED');
+			case ERROR_INVALID_PARAMETER:
+				console.log('ERROR: Cmd parament incorrect');
+			break;
+			case ERROR_INVALID_CRC:
+				console.log('ERROR: CRC INCORRECT');
+			break;
+			case ERROR_INVALID_COMMAND:
+				console.log('ERROR: CMD INCORRECT');
+			break;
+			case ERROR_INVALID_PARAMETER:
+				console.log('ERROR: CMD PARAMENT INCORRECT');
+			break;
+			case ERROR_INSUFFICIENT_FUNDS:
+				console.log('ERROR: INSUFFICIENT FUNDS ');
+				singleBlink(PIN_NOT_ENOUGHT_MONEY,5000);
+			break;
+			case ERROR_NON_EXISTENT_PRODUCT:
+				console.log('ERROR: PRODUCT IS NON EXISTENT');
+			break;
+			case ERROR_NON_EXISTENT_USER:
+				console.log('ERROR: USER IS NON EXISTENT');
+				singleBlink(PIN_CARD_NOT_REGISTERED,5000);
+			break;
+			case ERROR_NON_EXISTENT_SALE:
+				console.log('ERROR: SALE IS NON EXISTENT');
+			break;
+			case ERROR_NOT_REGISTERED_CARD:
+				console.log('ERROR: CARD IS NOT REGISTERED');
 			break;	
-		default:
-			console.log('Unknown comand exit code');
+			default:
+				console.log('Unknown comand exit code');
 			break;
-    }
-  }
+		}
+	}
 }
 
 function checkCRC16_CCITT(resp){
@@ -629,6 +645,7 @@ function startRFIDListening() {
 			console.log('UID        :: ' + data.uid);
 			uidToSend = processUidToSend(data.uid);
 			console.log('UID in HEX :: ' + uidToSend);
+			console.log('isVendDone'+isVendDone):
 			// Request to GloLime for get Balance value
             if (isVendDone){
                 sendMsgToGloLime(0x01, frameId, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
@@ -672,7 +689,7 @@ function nfcInit(error){
       clearInterval(idRFID);
       // start peripherial
       //P13.set();
-      //mdbRstPin.set();
+      //PIN_MDB_RST.set();
       nfc.listen();
       startRFIDListening();
       startSerialListening();
@@ -697,7 +714,7 @@ function initNfcModule(nfc) {
               clearInterval(idRFID);
               // start peripherial
               //P13.set();
-              //mdbRstPin.set();
+              //PIN_MDB_RST.set();
               nfc.listen();
               startRFIDListening();
               startSerialListening();
@@ -709,8 +726,9 @@ function initNfcModule(nfc) {
 
 function initPeripherial() {
     console.log("... initialising Peripherial ... ");
-    mdbRstPin.reset();
-    logger("MDB reset");
+    PIN_MDB_RST.reset();
+	PIN_DEV_READY.reset();
+    logger("MDB RESET");
 
     // setup serial for MDB transport communication
     Serial4.setup(115200);
@@ -718,26 +736,25 @@ function initPeripherial() {
     // setup RFID module
 	I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
 	//nfc = require("nfc").connect({i2c: I2C1, irqPin: P10});
-    nfc = require("nfc").connect({i2c: I2C1, irqPin: rfidIrqPin});
+    nfc = require("nfc").connect({i2c: I2C1, irqPin: PIN_RFID_IRQ});
 
-    // setup ethernet module
-	/**/
+    // setup ethernet module	
     logger("Setup ethernet module");
-    ethRstPin.set();
-    ethIrqPin.set();
+    PIN_ETH_RST.set();
+    PIN_ETH_IRQ.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
-    eth = require("WIZnet").connect(SPI2, ethCS);
-    eth.setIP();
+    eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
+    eth.setIP({mac: "56:44:58:30:30:31"});
     //glolime static IP
-    //eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8"});
+    //eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8", mac: "56:44:58:30:30:31"});
     var addr = eth.getIP();
     console.log(addr);
     client = require("net");
-	logger(client);
     initNfcModule(nfc);
     setTimeout(function(){
-        mdbRstPin.set();
+        PIN_MDB_RST.set();
         logger('MDB SET');
+		PIN_DEV_READY.set();
 	},12000);
 }
 
