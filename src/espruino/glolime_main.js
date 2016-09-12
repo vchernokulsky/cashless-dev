@@ -744,9 +744,9 @@ function initPeripherial() {
     PIN_ETH_IRQ.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
-    eth.setIP({mac: "56:44:58:30:30:31"});
+    //eth.setIP({mac: "56:44:58:30:30:31"});
     //glolime static IP
-    //eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8", mac: "56:44:58:30:30:31"});
+    eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8", mac: "56:44:58:30:30:31"});
     var addr = eth.getIP();
     console.log(addr);
     client = require("net");
@@ -759,7 +759,7 @@ function initPeripherial() {
 }
 
 
-//E.on('init', function() {
+E.on('init', function() {
     //P13.reset();
     initPeripherial();
-//});
+});
