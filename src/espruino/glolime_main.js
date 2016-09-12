@@ -297,7 +297,7 @@ function bytestuffToResp(array){
   return result;
 }
 
-var HOST = "192.168.10.147";
+var HOST = "192.168.20.34";
 // to make and send message - request - to GloLime by socket 
 function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
     var msg = [], msg_str = "";
@@ -645,7 +645,6 @@ function startRFIDListening() {
 			console.log('UID        :: ' + data.uid);
 			uidToSend = processUidToSend(data.uid);
 			console.log('UID in HEX :: ' + uidToSend);
-			console.log('isVendDone'+isVendDone):
 			// Request to GloLime for get Balance value
             if (isVendDone){
                 sendMsgToGloLime(0x01, frameId, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
@@ -744,9 +743,9 @@ function initPeripherial() {
     PIN_ETH_IRQ.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
-    //eth.setIP({mac: "56:44:58:30:30:31"});
+    eth.setIP({mac: "56:44:58:30:30:31"});
     //glolime static IP
-    eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8", mac: "56:44:58:30:30:31"});
+    //eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8", mac: "56:44:58:30:30:31"});
     var addr = eth.getIP();
     console.log(addr);
     client = require("net");
