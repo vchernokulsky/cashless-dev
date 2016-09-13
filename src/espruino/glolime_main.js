@@ -296,7 +296,8 @@ function bytestuffToResp(array){
   }
   return result;
 }
-
+// 20.34
+// 10.147 - home
 var HOST = "192.168.20.34";
 // to make and send message - request - to GloLime by socket 
 function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
@@ -308,7 +309,7 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
     {
         msg_str += msg[i];
     }
-    //console.log('MSG STR   :: ' + msg_str);
+    console.log('MSG STR   :: ' + msg_str);
     client.connect({host: HOST, port: 6767},  function(socket) {
         console.log('Client connected');
         console.log('REQUEST :: ' + _getHexStr(msg));
@@ -382,19 +383,24 @@ function processGloLimeResponse(resp){
 						// get Balance value in DEC
 						numBalance = processLitleEnd(tempBalance);
 						if(!isNaN(numBalance)) {
-							isVendDone = false;       //vend session started
-							var balanceToSend = numBalance.toString(10)+"\n";
-							//console.log("  :: balanceToSend -> " + balanceToSend);
-							Serial4.write(balanceToSend);  
-							// start timer for VEND session
-							//isSessionTimeout = true;          
-							//setTimeout(function(){
-							//  if(isSessionTimeout) {
-							//      console.log("SESSION TIMED OUT");
-							//      isVendDone = true;   //vend session closed
-							//      isSessionTimeout = false;
-							//  }
-							//}, 40000);
+							if (numBalance >= 2500){
+								isVendDone = false;       //vend session started
+								var balanceToSend = numBalance.toString(10)+"\n";
+								//console.log("  :: balanceToSend -> " + balanceToSend);
+								Serial4.write(balanceToSend);  
+								// start timer for VEND session
+								//isSessionTimeout = true;          
+								//setTimeout(function(){
+								//  if(isSessionTimeout) {
+								//      console.log("SESSION TIMED OUT");
+								//      isVendDone = true;   //vend session closed
+								//      isSessionTimeout = false;
+								//  }
+								//}, 40000);
+							} else {
+								console.log("Attention:: Not enought money");
+								singleBlink(PIN_NOT_ENOUGHT_MONEY,5000);
+							}
 						} else {
 							console.log("Recieved incorrect data");
 						}
@@ -435,13 +441,13 @@ function processGloLimeResponse(resp){
 			break;
 			case ERROR_NON_EXISTENT_USER:
 				console.log('ERROR: USER IS NON EXISTENT');
-				singleBlink(PIN_CARD_NOT_REGISTERED,5000);
 			break;
 			case ERROR_NON_EXISTENT_SALE:
 				console.log('ERROR: SALE IS NON EXISTENT');
 			break;
 			case ERROR_NOT_REGISTERED_CARD:
 				console.log('ERROR: CARD IS NOT REGISTERED');
+				singleBlink(PIN_CARD_NOT_REGISTERED,5000);
 			break;	
 			default:
 				console.log('Unknown comand exit code');
@@ -743,7 +749,7 @@ function initPeripherial() {
     PIN_ETH_IRQ.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
-    eth.setIP({mac: "56:44:58:30:30:31"});
+    eth.setIP({ip: "192.168.20.205", mac: "56:44:58:30:30:31"});
     //glolime static IP
     //eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8", mac: "56:44:58:30:30:31"});
     var addr = eth.getIP();
