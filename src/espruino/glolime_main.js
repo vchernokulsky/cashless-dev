@@ -200,7 +200,6 @@ function processTransportLayerCmd(cmd) {
       case 'VEND':          //VEND:<PRODUCT ID>:<PRODUCT PRICE>\n
         str_product_id = array[1];
         str_product_price = array[2];
-        //send balance to SportLife server
         isVendDone = true;
         //isSessionTimeout = false;
         //LED1.reset();
@@ -749,7 +748,7 @@ function initPeripherial() {
     PIN_ETH_IRQ.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
-    eth.setIP({ip: "192.168.20.205", mac: "56:44:58:30:30:31"});
+    eth.setIP({mac: "56:44:58:00:00:03"});
     //glolime static IP
     //eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8", mac: "56:44:58:30:30:31"});
     var addr = eth.getIP();
