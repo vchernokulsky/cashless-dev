@@ -34,9 +34,9 @@ var isGetBalanceSent	 = false;
 var isWriteOffV2Sent 	 = false;
 var isWriteOffCommitSent = false;
 
-var SPORTLIFE_HOST = "sync.sportlifeclub.ru";
-//var SPORTLIFE_HOST = "172.16.0.68";
-//var SPORTLIFE_STATIC_ADDR = {ip:"172.16.9.161", subnet:"255.255.0.0", gateway:"172.16.0.2", dns:"172.16.0.2"};
+//var SPORTLIFE_HOST = "sync.sportlifeclub.ru";
+var SPORTLIFE_HOST = "172.16.0.68";
+var SPORTLIFE_STATIC_ADDR = {ip:"172.16.9.161", subnet:"255.255.0.0", gateway:"172.16.0.2", dns:"172.16.0.2"};
 
 // WIFI configuration
 //var ssid = "VendexFree";
@@ -74,7 +74,6 @@ function getBalance(chipId, devId) {
 	};
 	logger('Connectiong to Server (getBalance) ... ');
 	var http = require("http");
-    PIN_DEV_READY.set();  // green led on
 	var timeoutID = setTimeout(function() {
 		isVendDone = true;      // for listen RFID
         PIN_DEV_READY.reset();  // green led off
@@ -97,13 +96,13 @@ function getBalance(chipId, devId) {
 			//logger("parseInt Result: " + numBalance);
 			if(!isNaN(numBalance)) {
 				if((numBalance/100) > 30) { //user can start vend operation
-					//isVendDone = false;       //vend session started
+                    //PIN_DEV_READY.set();  // green led on
 					product_price = "3000";
 					setBalance(deviceId, chip, srvid, product_price);
 				} else {
 					// not enought money
                     PIN_DEV_READY.reset();
-					singleBlink(PIN_NOT_ENOUGHT_MONEY,5000);
+					singleBlink(PIN_NOT_ENOUGHT_MONEY, 5000);
 					logger('Attention:: Not enought money');
                     isVendDone = true;
 				}
@@ -140,7 +139,7 @@ function processPesponse(resp){
 		break;
 		case ERR_CHIP_NOT_REG:
 			logger("Error:: Chip Not Registered");
-            PIN_DEV_READY.reset();
+            //PIN_DEV_READY.reset();
 			singleBlink(PIN_CARD_NOT_REGISTERED, 5000);
 		break;
 		default:
@@ -165,7 +164,7 @@ function setBalance(devId, chip, srvid, price) {
 		}
 	};
 	logger('Connecting to Server (WriteOffV2) ... ');
-	var timeoutID = setTimeout(function(){
+	var timeoutID = setTimeout(function() {
 		isVendDone = true; // for listen RFID
 		logger("Server is not available for 5 sec");
 	},5000);
@@ -183,7 +182,8 @@ function setBalance(devId, chip, srvid, price) {
 			//logger("Server connection closed, " + nRecv + " bytes received.");
 			logger("Response: " + writeoffId);
 			writeoffId = Resp;
-			if (parseInt(writeoffId,10) > 0 ){
+			if (parseInt(writeoffId, 10) > 0 ) {
+                PIN_DEV_READY.set();  // green led on
 				Serial4.write("3000\n");  //fixed balance for SportLife (30RUB)
 				logger("Send 30RUB to nucleo");
 			} else {
@@ -243,9 +243,9 @@ function writeOffCommit (sContent) {
 
 function singleBlink(led, timeout){
 	led.set();
-	setTimeout(function(){
-		led.reset();
-	},timeout);
+	setTimeout(function(led1){
+		led1.reset();
+	}, timeout, led);
 }
 
 var commitQueue = [];
@@ -394,8 +394,8 @@ function initPeripherial() {
     PIN_ETH_IRQ.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
-    //eth.setIP(SPORTLIFE_STATIC_ADDR);
-    eth.setIP({mac: "56:44:58:00:00:03"});
+    eth.setIP(SPORTLIFE_STATIC_ADDR);
+    //eth.setIP({mac: "56:44:58:00:00:03"});
     var addr = eth.getIP();
     logger(addr);
     logger("Ethernet module OK");
@@ -412,7 +412,6 @@ function initPeripherial() {
 		setTimeout(function(){
 			PIN_MDB_RST.set();
 			logger('MDB SET');
-			//PIN_DEV_READY.set();
 		}, 12000);
         nfc.listen();
       }
