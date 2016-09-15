@@ -2,30 +2,17 @@ var balance = "";
 
 var isEnabled = false;
 var isVendDone = true;
-//var isSessionTimeout = false;
 
 // WIFI configuration
-//var ssid = "neiron";
-//var pass = "msp430f2013";
+//var ssid = "VendexFree";
+//var pass = "vendex2016";
 
-//var ssid = "service";
-//var pass = "921249514821";
-
-var ssid = "VendexFree";
-var pass = "vendex2016";
-
-// var ssid = "SauronAP";
-// var pass = "yuwb3795";
-
-// P10, P13 - зеленая плата
-// P9, P0 - стенд
-
-var PIN_RFID_IRQ = P10; // P10
+var PIN_RFID_IRQ = P10;  // P10
 var PIN_MDB_RST  = P13;  // P13
 var PIN_ETH_IRQ  = P1;
 var PIN_ETH_RST  = P0;
 var PIN_ETH_CS   = B12;
-var PIN_WIFI_RST = A4;  //??
+var PIN_WIFI_RST = A4;
 
 // Indication funds by LEDs
 var PIN_NOT_ENOUGHT_MONEY   = P7; // на карте не достаточно средств
@@ -34,6 +21,8 @@ var PIN_DEV_READY           = P5;
 var GPIO4                   = P4;
 var GPIO5                   = P3;
 
+// Network configuration
+var NETWORK_CONFIG = {mac: "56:44:58:0:0:10", ip: "192.168.20.205", subnet: "255.255.255.0", gateway: "192.168.20.1", dns: "192.168.20.1"};
 
 // ---------------------------------------------------------------
 // -- begin variables for <cmd parser>
@@ -202,7 +191,6 @@ function processTransportLayerCmd(cmd) {
         str_product_price = array[2];
         isVendDone = true;
         //isSessionTimeout = false;
-        //LED1.reset();
         logger('VEND INFO | PRODUCT ID: ' + str_product_id + '   PRODUCT PRICE: ' + parseInt(str_product_price, 10)/100);
         product_id = uintToByteArray(parseInt(str_product_id)+1);
         product_price = uintToByteArray(parseInt(str_product_price));
@@ -214,7 +202,6 @@ function processTransportLayerCmd(cmd) {
         logger('CANCEL recieved');
         break;
       default:
-        //just log message
         logger('LOG: ' + cmd);
     }
 }
@@ -748,11 +735,10 @@ function initPeripherial() {
     PIN_ETH_IRQ.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
-    eth.setIP({mac: "56:44:58:00:00:03"});
-    //glolime static IP
-    //eth.setIP({ip: "192.168.0.10", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "8.8.8.8", mac: "56:44:58:30:30:31"});
+    eth.setIP(NETWORK_CONFIG);
     var addr = eth.getIP();
     console.log(addr);
+    
     client = require("net");
     initNfcModule(nfc);
     setTimeout(function(){
