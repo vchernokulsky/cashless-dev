@@ -34,25 +34,13 @@ var isGetBalanceSent	 = false;
 var isWriteOffV2Sent 	 = false;
 var isWriteOffCommitSent = false;
 
-//var SPORTLIFE_HOST = "sync.sportlifeclub.ru";
-var SPORTLIFE_HOST = "172.16.0.68";
-var SPORTLIFE_STATIC_ADDR = {ip:"172.16.9.161", subnet:"255.255.0.0", gateway:"172.16.0.2", dns:"172.16.0.2"};
+var SPORTLIFE_HOST = "sync.sportlifeclub.ru";
+//var SPORTLIFE_HOST = "172.16.0.68";
+//var SPORTLIFE_STATIC_ADDR = {ip:"172.16.9.161", subnet:"255.255.0.0", gateway:"172.16.0.2", dns:"172.16.0.2"};
 
 // WIFI configuration
-//var ssid = "neiron";
-//var pass = "msp430f2013";
-
-//var ssid = "service";
-//var pass = "921249514821";
-
-var ssid = "VendexFree";
-var pass = "vendex2016";
-
-// var ssid = "SauronAP";
-// var pass = "yuwb3795";
-
-//var ssid = "Keenetic-2078";
-//var pass = "sRwvGyiv";
+//var ssid = "VendexFree";
+//var pass = "vendex2016";
 
 function logger(msg) {
     console.log(msg);
@@ -73,7 +61,6 @@ function getBalance(chipId, devId) {
 	var numBalance = 0;
 	//TODO: read chip id from RFID
 	var content = "chip="+chipId+"&dev="+devId;
-	//logger('content = ' + content);
 	var options = {
 	host: SPORTLIFE_HOST,
 		port: '60080',
@@ -87,8 +74,10 @@ function getBalance(chipId, devId) {
 	};
 	logger('Connectiong to Server (getBalance) ... ');
 	var http = require("http");
-	var timeoutID = setTimeout(function(){
-		isVendDone = true; // for listen RFID
+    PIN_DEV_READY.set();  // green led on
+	var timeoutID = setTimeout(function() {
+		isVendDone = true;      // for listen RFID
+        PIN_DEV_READY.reset();  // green led off
 		logger("Server is not available for 5 sec");
 	},5000);
 	http.request(options, function(res) {
@@ -113,6 +102,7 @@ function getBalance(chipId, devId) {
 					setBalance(deviceId, chip, srvid, product_price);
 				} else {
 					// not enought money
+                    PIN_DEV_READY.reset();
 					singleBlink(PIN_NOT_ENOUGHT_MONEY,5000);
 					logger('Attention:: Not enought money');
                     isVendDone = true;
@@ -129,22 +119,28 @@ function getBalance(chipId, devId) {
 function processPesponse(resp){
 	switch(resp){
 		case ERR_CHIP_NUM:
+            PIN_DEV_READY.reset();        
 			logger("Error:: Invalid Chip Number");
 		break;
 		case ERR_UNEXPECTED_RESULT:
+            PIN_DEV_READY.reset();        
 			logger("Error:: Invalid Result");
 		break;
 		case ERR_DEV_NAME:
+            PIN_DEV_READY.reset();        
 			logger("Error:: Invalid Device Name");
 		break;
 		case ERR_DEV_NOT_FOUND:
-			logger("Error:: Device Or Club Not Found");
+            PIN_DEV_READY.reset();
+            logger("Error:: Device Or Club Not Found");
 		break;
 		case ERR_CHIP_NOT_FOUND:
+            PIN_DEV_READY.reset();
 			logger("Error:: Chip Not Found");
 		break;
 		case ERR_CHIP_NOT_REG:
 			logger("Error:: Chip Not Registered");
+            PIN_DEV_READY.reset();
 			singleBlink(PIN_CARD_NOT_REGISTERED, 5000);
 		break;
 		default:
@@ -200,45 +196,6 @@ function setBalance(devId, chip, srvid, price) {
 	}).end(content);
 }
 
-/*
-function writeoffCommit (chip, writeoffId, success) {
-  logger(' ... WriteOff Commit ... ');
-  var content =
-      "dev="+deviceId+
-      "&chip="+chip+
-      "&writeoffid="+writeoffId+
-      "&success="+success;
-  logger("contentToSend :: " + content);
-  var options = {
-	host: SPORTLIFE_HOST,
-	port: '60080',
-    path: '/slsrv/chip/writeoffcommit',
-    protocol: "http:",
-    method: "POST",
-    headers: {
-      "Content-Type":"application/x-www-form-urlencoded",
-      "Content-Length":content.length
-    }
-  };
-  logger('Connectiong to Server ... ');
-  var http = require("http");
-  http.request(options, function(res) {
-    console.log("Request content: " + content);
-    logger('Connected to Server');
-    var nRecv = 0;
-    var Resp = "";
-    res.on('data', function(data) {
-      nRecv += data.length;
-      Resp += data;
-      //logger("Response: " + Resp);
-    });
-    res.on('close',function(data) {
-      logger("Server connection closed, " + nRecv + " bytes received.");
-      logger("Response: " + Resp);
-    });
-  }).end(content);
-}
-*/
 
 function writeOffCommit (sContent) {
 	isServerAvailable = false;
@@ -291,7 +248,6 @@ function singleBlink(led, timeout){
 	},timeout);
 }
 
-
 var commitQueue = [];
 function processTransportLayerCmd(cmd) {
     //var prefix = cmd.substr(0, PREFIX_LEN);
@@ -316,8 +272,8 @@ function processTransportLayerCmd(cmd) {
         //send writeoffCommit to SportLife server
         isVendDone = true;
         LED1.reset();
+        PIN_DEV_READY.reset();
         logger('VEND INFO | PRODUCT ID: ' + product_id + '   PRODUCT PRICE: ' + parseInt(product_price, 10)/100);
-        //setBalance(chip, srvid, price);
         // код завершения операции/продажи: 1 - успешно
         successId  = 1;
 		commitQueue[commitQueue.length] =
@@ -325,10 +281,10 @@ function processTransportLayerCmd(cmd) {
 			"&chip="+chip+
 			"&writeoffid="+writeoffId+
 			"&success="+successId;
-        //writeoffCommit(chip,writeoffId,successId);
         break;
       case 'CANCEL':          //RESET
         LED1.reset();
+        PIN_DEV_READY.reset();        
         isVendDone = true;
         successId  = 5; 
 		commitQueue[commitQueue.length] =
@@ -438,8 +394,8 @@ function initPeripherial() {
     PIN_ETH_IRQ.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
-    eth.setIP(SPORTLIFE_STATIC_ADDR);
-    //eth.setIP();
+    //eth.setIP(SPORTLIFE_STATIC_ADDR);
+    eth.setIP({mac: "56:44:58:00:00:03"});
     var addr = eth.getIP();
     logger(addr);
     logger("Ethernet module OK");
@@ -456,18 +412,12 @@ function initPeripherial() {
 		setTimeout(function(){
 			PIN_MDB_RST.set();
 			logger('MDB SET');
-			PIN_DEV_READY.set();
-		},12000);
+			//PIN_DEV_READY.set();
+		}, 12000);
         nfc.listen();
       }
     });
 }
-
-//initPeripherial();
-//startRFIDListening();
-//startSerialListening();
-
-
 
 /**/
 E.on('init', function() {
