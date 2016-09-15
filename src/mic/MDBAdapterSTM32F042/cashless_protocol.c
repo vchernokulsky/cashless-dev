@@ -35,7 +35,6 @@ unsigned int item_id     = 0;
 unsigned int cur_balance = 0;
 //temporary
 unsigned char isInfoShown = 0x00;
-unsigned short flag_vend_approved = 0;
 // cashless FSM states
 unsigned int _cashless_state = ST_INACTIVE;
 unsigned int _delay_state;
@@ -225,7 +224,6 @@ void process_enabled(unsigned char* data) {
 		break;
 	case POLL:
 		cur_balance = read_user_balance();
-		flag_vend_approved = 0;
 		//log_recv_amount(cur_balance);
 		if (cur_balance > 0) {  // BEGIN SESSION
 			set_led_state(0x01);
@@ -320,6 +318,8 @@ void process_session_idle(unsigned char* data) {
 	char resp_revalue_denied[2] = { 0x0e, 0x0e };
 	char resp_session_cancel[2] = { 0x04, 0x04 };
 	char resp_end_session[2] = { 0x07, 0x07 };
+	char resp_vend_approved[4] = { 0, 0, 0, 0 };
+	char resp_vend_denided[2] = {0x06, 0x06};
 	char chk = 0x00;
 
 	unsigned short revalue_limit;
@@ -341,12 +341,25 @@ void process_session_idle(unsigned char* data) {
 		subCmdId = (int) data[1];
 		switch (subCmdId) {
 		case 0x00: // Vend Request
-			item_price = ((value | (unsigned int) data[2]) << 8) | (unsigned int) data[3];  //item price SCALED!!!
-			//log_recv_amount(item_price);
-			item_id   = ((value1 | (unsigned int)data[4]) << 8) | (unsigned int)data[5];  //item number
 			fill_mdb_command(&resp, resp_ack, 1);
 			send_mdb_command(&resp);
-			_cashless_state = ST_VEND;
+			item_price = ((value | (unsigned int)data[2]) << 8) | (unsigned int) data[3];  //item price SCALED!!!
+			item_id   = ((value1 | (unsigned int)data[4]) << 8) | (unsigned int)data[5];  //item number
+			if(cur_balance >= item_price) {
+				resp_vend_approved[0] = 0x05;
+				resp_vend_approved[1] = (char) (item_price >> 8);
+				resp_vend_approved[2] = (char) (item_price & 0x00FF);
+				chk = calculate_checksum(resp_vend_approved, 4);
+				resp_vend_approved[3] = chk;
+				// delaycmd =  Vend Approved
+				fill_mdb_command(&delay_cmd, resp_vend_approved, 4);
+				_cashless_state = ST_VEND;
+			}
+			else {
+				// not enought money
+				fill_mdb_command(&delay_cmd, resp_vend_denided, 2);
+				_cashless_state = ST_VEND;
+			}
 			log("(IDLE)|RECV:VEND[Vend Request] ; SEND: ACK\n");
 			break;
 		case 0x01: // Cancel Vend
@@ -385,7 +398,7 @@ void process_session_idle(unsigned char* data) {
 		case VEND_NOTHING:
 			if (delay_cmd.length > 0) {
 				send_mdb_command(&delay_cmd);
-				log("(IDLE)|RECV:POLL ; SEND: delay_cmd\n");
+				log("(IDLE)|RECV:POLL; SEND: delay_cmd\n");
 				clear_mdb_command(&delay_cmd);
 			} else {
 				// increment vend timeout counter
@@ -450,7 +463,6 @@ void process_vend(unsigned char* data) {
 	char resp_just_reset[2] = { 0x00, 0x00 };
 	char chk;
 	int cmdId = (int) (data[0] & MASK_CMD);
-	char commad_to_send[4] = { 0, 0, 0, 0 };
 
 	int subCmdId = -1;
 	switch (cmdId) {
@@ -463,19 +475,10 @@ void process_vend(unsigned char* data) {
 		break;
 	case POLL:
 		// No CoinMechanismPushes No SessionFailure
-		// VEND APPROVED
-		//cur_balance -= item_price;
-		if (flag_vend_approved == 0){
-			commad_to_send[0] = 0x05;
-			commad_to_send[1] = (char) (item_price >> 8);
-			commad_to_send[2] = (char) (item_price & 0x00FF);
-			chk = calculate_checksum(commad_to_send, 4);
-			commad_to_send[3] = chk;
-			// send Vend Approved
-			fill_mdb_command(&resp, commad_to_send, 4);
-			send_mdb_command(&resp);
-			log("(VEND)|RECV:POLL; SEND: VEND APPROVED\n");
-			flag_vend_approved++;
+		if (delay_cmd.length > 0) {
+			send_mdb_command(&delay_cmd);
+			log("(VEND)|RECV:POLL; SEND: delay_cmd\n");
+			clear_mdb_command(&delay_cmd);
 		} else {
 			fill_mdb_command(&resp, resp_ack, 1);
 			send_mdb_command(&resp);
@@ -520,7 +523,6 @@ void process_vend(unsigned char* data) {
 			log("(VEND)|RECV:VEND[SESSION COMPLETE]; SEND: ACK\n");
 			break;
 		default:
-			//log("(VEND)|UNKNOWN SUBCOMMAND\n");
 			log_mdb_command(ST_VEND,cmdId,subCmdId);
 		}
 		break;
