@@ -1,26 +1,21 @@
-var balance = "";
 var isEnabled = true;
 var isVendDone = true;
 var isSessionTimeout = false;
 
 var chip = "";
-var deviceId = "1";
 var writeoffId = "";
 var successId = 1;
-var srvid = 8633;
-var product_price;
-var product_id;
 
-// P10, P13, P1 - зеленая плата
-// P9, P0 - стенд
+var SERVICE_ID = 8633;
+var DEVICE_ID  = "1";
 
-//
 var PIN_RFID_IRQ = P10; // P9
 var PIN_MDB_RST  = P13; // P13
 var PIN_ETH_IRQ  = P1; //B12-стенд_sportlife //P10-стенд //P1-зеленая
 var PIN_ETH_RST  = P0;
 var PIN_ETH_CS      = B12;
 var PIN_WIFI_RST = A4;  //??
+
 // Indication funds by LEDs
 var PIN_NOT_ENOUGHT_MONEY   = P7; // на карте не достаточно средств
 var PIN_CARD_NOT_REGISTERED = P6; // карта не зарегистрирована в системе 
@@ -28,15 +23,10 @@ var PIN_DEV_READY           = P5;
 var GPIO4                   = P4;
 var GPIO5                   = P3;
 
-// for checking connect to Server
-var isServerAvailable 	 = false;
-var isGetBalanceSent	 = false;
-var isWriteOffV2Sent 	 = false;
-var isWriteOffCommitSent = false;
-
 //var SPORTLIFE_HOST = "sync.sportlifeclub.ru";
 var SPORTLIFE_HOST = "172.16.0.68";
 var SPORTLIFE_STATIC_ADDR = {ip:"172.16.9.161", subnet:"255.255.0.0", gateway:"172.16.0.2", dns:"172.16.0.2"};
+var SPORTLIFE_SERVER_TIMEOUT = 5000;
 
 // WIFI configuration
 //var ssid = "VendexFree";
@@ -54,66 +44,6 @@ var ERR_DEV_NAME          = "ErrInvalidDeviceName";
 var ERR_DEV_NOT_FOUND     = "ErrDeviceOrClubNotFound";
 var ERR_CHIP_NOT_FOUND    = "ErrChipNotFound";
 var ERR_CHIP_NOT_REG      = "ErrChipNotRegistered";
-
-function getBalance(chipId, devId) {
-	isServerAvailable = false;
-	balance = "";
-	var numBalance = 0;
-	//TODO: read chip id from RFID
-	var content = "chip="+chipId+"&dev="+devId;
-	var options = {
-	host: SPORTLIFE_HOST,
-		port: '60080',
-		path: '/slsrv/Chip/GetState',
-		protocol: "http:",
-		method: "POST",
-		headers: {
-			"Content-Type":"application/x-www-form-urlencoded",
-			"Content-Length":content.length,
-		},
-	};
-	logger('Connectiong to Server (getBalance) ... ');
-	var http = require("http");
-	var timeoutID = setTimeout(function() {
-		isVendDone = true;      // for listen RFID
-        PIN_DEV_READY.reset();  // green led off
-		logger("Server is not available for 5 sec");
-	},5000);
-	http.request(options, function(res) {
-		logger('Connected to Server (getBalance)');
-		var nRecv = 0;
-		res.on('data', function(data) {
-			nRecv += data.length;
-			balance += data;
-			//logger('Received data :: ' + balance);
-		});
-		res.on('close',function(data) {
-			clearTimeout(timeoutID);
-			//logger("Server connection closed, " + nRecv + " bytes received.");
-			logger("Response: " + balance);
-			// send balance to MDB transport
-			numBalance = parseInt(balance, 10);
-			//logger("parseInt Result: " + numBalance);
-			if(!isNaN(numBalance)) {
-				if((numBalance/100) > 30) { //user can start vend operation
-                    //PIN_DEV_READY.set();  // green led on
-					product_price = "3000";
-					setBalance(deviceId, chip, srvid, product_price);
-				} else {
-					// not enought money
-                    PIN_DEV_READY.reset();
-					singleBlink(PIN_NOT_ENOUGHT_MONEY, 5000);
-					logger('Attention:: Not enought money');
-                    isVendDone = true;
-				}
-			} else {
-				processPesponse(balance);
-				isVendDone = true;
-			}
-			isServerAvailable = true;
-		});
- 	}).end(content);
-}
 
 function processPesponse(resp){
 	switch(resp){
@@ -148,10 +78,62 @@ function processPesponse(resp){
 	}
 }
 
+function getBalance(chipId) {
+	var balance = "";
+	var numBalance = 0;
+	//TODO: read chip id from RFID
+	var content = "chip=" + chipId + "&dev=" + DEVICE_ID;
+	var options = {
+	host: SPORTLIFE_HOST,
+		port: '60080',
+		path: '/slsrv/Chip/GetState',
+		protocol: "http:",
+		method: "POST",
+		headers: {
+			"Content-Type":"application/x-www-form-urlencoded",
+			"Content-Length":content.length,
+		},
+	};
+	logger('Connecting to Server (getBalance) ... ');
+	var http = require("http");
+	var timeoutID = setTimeout(function() {
+		isVendDone = true;      // for listen RFID
+        PIN_DEV_READY.reset();  // green led off
+		logger("Server is not available for 5 sec");
+	}, SPORTLIFE_SERVER_TIMEOUT);
+	http.request(options, function(res) {
+		logger('Connected to Server (getBalance)');
+		var nRecv = 0;
+		res.on('data', function(data) {
+			nRecv += data.length;
+			balance += data;
+		});
+		res.on('close',function(data) {
+			clearTimeout(timeoutID);
+			logger("Response: " + balance);
+			numBalance = parseInt(balance, 10);
+			if(!isNaN(numBalance)) {
+				if((numBalance/100) >= 30) { //user can start vend operation
+					var fixedPrice = "3000";
+					setBalance(chip, fixedPrice);
+				} else {
+					// not enought money
+                    PIN_DEV_READY.reset();
+					singleBlink(PIN_NOT_ENOUGHT_MONEY, 5000);
+					logger('Attention:: Not enought money');
+                    isVendDone = true;
+				}
+			} else {
+				processPesponse(balance);
+				isVendDone = true;
+			}
+		});
+ 	}).end(content);
+}
+
 // REST: WriteOffV2 error responses
-function setBalance(devId, chip, srvid, price) {
-	isServerAvailable = false;
-	var content = "dev=" + devId + "&chip=" + chip + "&srvid=" + srvid + "&price=" + price;
+function setBalance(chip, price) {
+	var content = "dev=" + DEVICE_ID + "&chip=" + chip + "&srvid=" + SERVICE_ID + "&price=" + price;
 	var options = {
 		host: SPORTLIFE_HOST,
 		port: '60080',
@@ -167,7 +149,7 @@ function setBalance(devId, chip, srvid, price) {
 	var timeoutID = setTimeout(function() {
 		isVendDone = true; // for listen RFID
 		logger("Server is not available for 5 sec");
-	},5000);
+	}, SPORTLIFE_SERVER_TIMEOUT);
 	var http = require("http");
 	http.request(options, function(res) {
 		logger('Connected to Server (WriteOffV2)');
@@ -179,10 +161,9 @@ function setBalance(devId, chip, srvid, price) {
 		});
 		res.on('close',function(data) {
 			clearTimeout(timeoutID);
-			//logger("Server connection closed, " + nRecv + " bytes received.");
 			logger("Response: " + writeoffId);
 			writeoffId = Resp;
-			if (parseInt(writeoffId, 10) > 0 ) {
+			if (parseInt(writeoffId, 10) > 0) {
                 PIN_DEV_READY.set();  // green led on
 				Serial4.write("3000\n");  //fixed balance for SportLife (30RUB)
 				logger("Send 30RUB to nucleo");
@@ -191,14 +172,11 @@ function setBalance(devId, chip, srvid, price) {
 				processPesponse(writeoffId);
 				isVendDone = true;
 			}
-			isServerAvailable = true;
 		});
 	}).end(content);
 }
 
-
 function writeOffCommit (sContent) {
-	isServerAvailable = false;
 	logger(' ... WriteOff Commit ... ');
 	var content = sContent;
 	if(typeof sContent === 'String') {logger("correct content type");}
@@ -214,10 +192,10 @@ function writeOffCommit (sContent) {
 		}
 	};
 	logger('Connectiong to Server (writeOffCommit) ... ');
-	var toID = setTimeout(function(){
+	var timeoutId = setTimeout(function(){
 		isVendDone = true; // for listen RFID
 		logger("Server is not available for 5 sec");
-	},5000);
+	}, SPORTLIFE_SERVER_TIMEOUT);
 	var http = require("http");
 	http.request(options, function(res) {
 		logger("Request content: " + content);
@@ -225,74 +203,64 @@ function writeOffCommit (sContent) {
 		var nRecv = 0;
 		var Resp = "";
 		res.on('data', function(data) {
-		  nRecv += data.length;
-		  Resp += data;
-		  //logger("Response: " + Resp);
+            nRecv += data.length;
+            Resp += data;
 		});
 		res.on('close',function(data) {
-			clearTimeout(toID);
-		  //logger("Server connection closed, " + nRecv + " bytes received.");
-		  logger("Response: " + Resp);
-		  if(Resp.toLowerCase() == 'ok') {
-			commitQueue.splice(0,1);
-		  }
-		  isServerAvailable = true;
+            clearTimeout(timeoutId);
+            if(Resp.toLowerCase() == 'ok') {
+                commitQueue.splice(0, 1);
+            }
 		});
 	}).end(content);
 }
 
 function singleBlink(led, timeout){
 	led.set();
-	setTimeout(function(led1){
+	setTimeout(function(led1) {
 		led1.reset();
 	}, timeout, led);
 }
 
 var commitQueue = [];
 function processTransportLayerCmd(cmd) {
-    //var prefix = cmd.substr(0, PREFIX_LEN);
     var array = cmd.split(':');
     var prefix = array[0];
     switch(prefix) {
       case 'ENABLE':          //ENABLE
         isEnabled = true;
         isVendDone = true;
-        logger('ENABLE recieved');
-        //LED notification
-        LED1.set();
-        setTimeout(function(){LED1.reset();}, 3000);
+        singleBlink(LED1, 3000);
+        logger('ENABLE recieved');        
         break;
       case 'DISABLE':
         isEnabled = false;
         logger('DISABLE received');
         break;
       case 'VEND':          //VEND:<PRODUCT ID>:<PRODUCT PRICE>
-        product_id = array[1];
-        product_price = array[2];
+        PIN_DEV_READY.reset();      
+        var product_id = array[1];
+        var product_price = array[2];
         //send writeoffCommit to SportLife server
         isVendDone = true;
-        LED1.reset();
-        PIN_DEV_READY.reset();
         logger('VEND INFO | PRODUCT ID: ' + product_id + '   PRODUCT PRICE: ' + parseInt(product_price, 10)/100);
         // код завершения операции/продажи: 1 - успешно
         successId  = 1;
 		commitQueue[commitQueue.length] =
-			"dev="+deviceId+
-			"&chip="+chip+
-			"&writeoffid="+writeoffId+
-			"&success="+successId;
+			"dev=" + DEVICE_ID +
+			"&chip=" + chip +
+			"&writeoffid=" + writeoffId +
+			"&success=" + successId;
         break;
       case 'CANCEL':          //RESET
-        LED1.reset();
         PIN_DEV_READY.reset();        
         isVendDone = true;
         successId  = 5; 
 		commitQueue[commitQueue.length] =
-			"dev="+deviceId+
-			"&chip="+chip+
-			"&writeoffid="+writeoffId+
-			"&success="+successId;
-		//writeoffCommit(chip,writeoffId,successId);
+			"dev=" + DEVICE_ID +
+			"&chip=" + chip +
+			"&writeoffid=" + writeoffId +
+			"&success=" + successId;
         logger('CANCEL recieved');
         break;
       default:
@@ -331,7 +299,7 @@ function readChipIdFromRFID(uid, keyData, block, callback) {
         // try to get balance from server
         if ((typeof callback === 'function') && (isVendDone)) {
 			isVendDone = false;
-			callback(chip, deviceId);
+			callback(chip);
         }
       });
     }
@@ -364,7 +332,6 @@ function startSerialListening() {
         var chars = Serial4.available();
         if(chars > 0) {
           buffer += Serial4.read(chars);
-          //console.log("BUFFER: " + buffer);
           var lastIdx = buffer.indexOf('\n');
           if(lastIdx > 0) {
             command = buffer.substring(0, lastIdx);
@@ -376,7 +343,6 @@ function startSerialListening() {
 }
 
 var nfc = null;
-//,	eth = null;
 function initPeripherial() {
     // init nucleo state
     PIN_MDB_RST.reset();
@@ -388,7 +354,6 @@ function initPeripherial() {
     Serial4.setup(115200);   //MDB transport serial port
 
     // setup ethernet module
-    /**/
     logger("Setup ethernet module");
     PIN_ETH_RST.set();
     PIN_ETH_IRQ.set();
@@ -423,7 +388,7 @@ E.on('init', function() {
     initPeripherial();
     startRFIDListening();
     startSerialListening();
-    setInterval(function(){
+    setInterval(function() {
 	  if(commitQueue.length > 0) {
 		  writeOffCommit(commitQueue[0]);
 	  } else {
