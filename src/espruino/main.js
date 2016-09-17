@@ -1,10 +1,11 @@
 var isEnabled = true;
 var isVendDone = true;
-var isSessionTimeout = false;
 
 var chip = "";
 var writeoffId = "";
 var successId = 1;
+
+var userSessionId = 1;
 
 var SERVICE_ID = 8633;
 var DEVICE_ID  = "1";
@@ -32,9 +33,17 @@ var SPORTLIFE_SERVER_TIMEOUT = 5000;
 //var ssid = "VendexFree";
 //var pass = "vendex2016";
 
+// simple helper functions
 function logger(msg) {
     console.log(msg);
     //Serial2.write(msg + "\r\n");
+}
+
+function singleBlink(led, timeout){
+	led.set();
+	setTimeout(function(led1) {
+		led1.reset();
+	}, timeout, led);
 }
 
 // REST: GetState error responses
@@ -78,7 +87,7 @@ function processPesponse(resp){
 	}
 }
 
-function getBalance(chipId) {
+function getBalance(sessionId, chipId) {
 	var balance = "";
 	var numBalance = 0;
 	//TODO: read chip id from RFID
@@ -95,12 +104,12 @@ function getBalance(chipId) {
 		},
 	};
 	logger('Connecting to Server (getBalance) ... ');
-	var http = require("http");
 	var timeoutID = setTimeout(function() {
 		isVendDone = true;      // for listen RFID
         PIN_DEV_READY.reset();  // green led off
 		logger("Server is not available for 5 sec");
 	}, SPORTLIFE_SERVER_TIMEOUT);
+	var http = require("http");    
 	http.request(options, function(res) {
 		logger('Connected to Server (getBalance)');
 		var nRecv = 0;
@@ -108,14 +117,14 @@ function getBalance(chipId) {
 			nRecv += data.length;
 			balance += data;
 		});
-		res.on('close',function(data) {
+		res.on('close', function(data) {
 			clearTimeout(timeoutID);
 			logger("Response: " + balance);
 			numBalance = parseInt(balance, 10);
-			if(!isNaN(numBalance)) {
+			if(!isNaN(numBalance) && (sessionId == userSessionId)) {
 				if((numBalance/100) >= 30) { //user can start vend operation
 					var fixedPrice = "3000";
-					setBalance(chip, fixedPrice);
+					setBalance(sessionId, chip, fixedPrice);
 				} else {
 					// not enought money
                     PIN_DEV_READY.reset();
@@ -132,7 +141,7 @@ function getBalance(chipId) {
 }
 
 // REST: WriteOffV2 error responses
-function setBalance(chip, price) {
+function setBalance(sessionId, chip, price) {
 	var content = "dev=" + DEVICE_ID + "&chip=" + chip + "&srvid=" + SERVICE_ID + "&price=" + price;
 	var options = {
 		host: SPORTLIFE_HOST,
@@ -163,7 +172,7 @@ function setBalance(chip, price) {
 			clearTimeout(timeoutID);
 			logger("Response: " + writeoffId);
 			writeoffId = Resp;
-			if (parseInt(writeoffId, 10) > 0) {
+			if ((parseInt(writeoffId, 10) > 0) && (sessionId == userSessionId)) {
                 PIN_DEV_READY.set();  // green led on
 				Serial4.write("3000\n");  //fixed balance for SportLife (30RUB)
 				logger("Send 30RUB to nucleo");
@@ -176,7 +185,7 @@ function setBalance(chip, price) {
 	}).end(content);
 }
 
-function writeOffCommit (sContent) {
+function writeOffCommit(sContent) {
 	logger(' ... WriteOff Commit ... ');
 	var content = sContent;
 	if(typeof sContent === 'String') {logger("correct content type");}
@@ -213,13 +222,6 @@ function writeOffCommit (sContent) {
             }
 		});
 	}).end(content);
-}
-
-function singleBlink(led, timeout){
-	led.set();
-	setTimeout(function(led1) {
-		led1.reset();
-	}, timeout, led);
 }
 
 var commitQueue = [];
@@ -271,7 +273,7 @@ function processTransportLayerCmd(cmd) {
 
 // mifare constants
 var MIFARE_AUTH_TYPE = 0;
-var RFID_BLOCK_NUM = 4;
+var RFID_BLOCK_NUM   = 4;
 var RFID_KEY = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
 function readChipIdFromRFID(uid, keyData, block, callback) {
   var result = "error";
@@ -286,7 +288,6 @@ function readChipIdFromRFID(uid, keyData, block, callback) {
           logger('Block read error');
           logger('MSG: ' + data);
         } else {
-          //logger('Block #' + block + ' data: ' + data);
           result = '';
           for(var i=0; i<data.length; i++) {
             ch1 = data[i].toString(16);
@@ -299,7 +300,7 @@ function readChipIdFromRFID(uid, keyData, block, callback) {
         // try to get balance from server
         if ((typeof callback === 'function') && (isVendDone)) {
 			isVendDone = false;
-			callback(chip);
+			callback(++userSessionId, chip);
         }
       });
     }
