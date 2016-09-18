@@ -141,8 +141,12 @@ function getBalance(sessionId, chipId) {
 		res.on('close', function(data) {
 			clearTimeout(timeoutID);
 			logger("Response: " + balance);
+            if(sessionId != _sessionId) {
+              logger("ERROR: response for previous session");
+              return;
+            }
 			numBalance = parseInt(balance, 10);
-			if(!isNaN(numBalance) && (sessionId == _sessionId)) {
+			if(!isNaN(numBalance)) {
 				if((numBalance/100) >= 30) { //user can start vend operation
                     chip = chipId;
 					var fixedPrice = "3000";
@@ -155,10 +159,8 @@ function getBalance(sessionId, chipId) {
                     isVendDone = true;
 				}
 			} else {
-              if(sessionId == _sessionId) {
-				processPesponse(balance);
-				isVendDone = true;
-              }
+                processPesponse(balance);
+                isVendDone = true;
 			}
 		});
     }).end(content);
@@ -195,9 +197,13 @@ function setBalance(sessionId, chipId, price) {
 		});
 		res.on('close',function(data) {
 			clearTimeout(timeoutID);
-			logger("Response: " + writeoffId);
 			writeoffId = Resp;
-			if ((parseInt(writeoffId, 10) > 0) && (sessionId == _sessionId)) {
+			logger("Response: " + writeoffId);
+            if(sessionId != _sessionId) {
+              logger("ERROR: response for previous session");
+              return;
+            }
+			if (parseInt(writeoffId, 10) > 0) {
                 PIN_DEV_READY.set();  // green led on
 				Serial4.write("3000\n");  //fixed balance for SportLife (30RUB)
 				logger("Send 30RUB to nucleo");
@@ -216,11 +222,9 @@ function setBalance(sessionId, chipId, price) {
                 },60000);
                 logger("Wait timeout for session: " + sessionId + " timeout id: " + _vendSessionTimeout);
 			} else {
-              if(sessionId == _sessionId) {
-				processPesponse(writeoffId);
-				isVendDone = true;
-				logger("WriteOffId <= 0");
-              }
+                processPesponse(writeoffId);
+                isVendDone = true;
+                logger("WriteOffId <= 0");
 			}
 		});
 	}).end(content);
@@ -358,7 +362,6 @@ function readChipIdFromRFID(uid, keyData, block, callback) {
 }
 
 function startRFIDListening() {
-// обработка взаимодействия с RFID меткой
     nfc.on('tag', function(error, data) {
       if (error) {
         logger('tag read error');
