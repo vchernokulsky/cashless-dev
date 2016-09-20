@@ -3,6 +3,9 @@ var balance = "";
 var isEnabled = false;
 var isVendDone = true;
 
+var _sessionId = 0;
+var _failuresCount = 0;
+
 // WIFI configuration
 //var ssid = "VendexFree";
 //var pass = "vendex2016";
@@ -22,7 +25,10 @@ var GPIO4                   = P4;
 var GPIO5                   = P3;
 
 // Network configuration
-var NETWORK_CONFIG = {mac: "56:44:58:0:0:10", ip: "192.168.20.205", subnet: "255.255.255.0", gateway: "192.168.20.1", dns: "192.168.20.1"};
+var HOST = "192.168.0.5";
+//var NETWORK_CONFIG = {mac: "56:44:58:0:0:10", ip: "192.168.20.205", subnet: "255.255.255.0", gateway: "192.168.20.1", dns: "192.168.20.1"};
+var NETWORK_CONFIG = {mac: "56:44:58:0:0:06"};
+
 
 // ---------------------------------------------------------------
 // -- begin variables for <cmd parser>
@@ -282,9 +288,7 @@ function bytestuffToResp(array){
   }
   return result;
 }
-// 20.34
-// 10.147 - home
-var HOST = "192.168.20.34";
+
 // to make and send message - request - to GloLime by socket 
 function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
     var msg = [], msg_str = "";
@@ -311,11 +315,12 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
 		setTimeout(function (arg) {
         if (!isRespGot){
 			console.log(' Timeout Error');
-			if (arg) {
-				arg.end();
-			}
+              if (arg) {
+                  arg.end();
+                  _failuresCount++;
+              }
 			} else {
-          console.log("data received");
+              console.log("data received");
 			}
 		}, 5000, socket);
 		socket.on('data', function(data){
@@ -629,6 +634,7 @@ var nfc = null;
 function startRFIDListening() {
 	// обработка взаимодействия с RFID меткой
 	nfc.on('tag', function(error, data) {
+        logger("Frame ID:" + frameId + "  Failures count:" + _failuresCount);
 		if (error) {
 			print('tag read error');
 		} else {
@@ -716,7 +722,7 @@ function initNfcModule(nfc) {
 }
 
 function initPeripherial() {
-    console.log("... initialising Peripherial ... ");
+    console.log("... peripherial initialising ... ");
     PIN_MDB_RST.reset();
 	PIN_DEV_READY.reset();
     logger("MDB RESET");
@@ -726,30 +732,31 @@ function initPeripherial() {
 
     // setup RFID module
 	I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
-	//nfc = require("nfc").connect({i2c: I2C1, irqPin: P10});
     nfc = require("nfc").connect({i2c: I2C1, irqPin: PIN_RFID_IRQ});
 
-    // setup ethernet module	
+    // setup ethernet module
     logger("Setup ethernet module");
     PIN_ETH_RST.set();
     PIN_ETH_IRQ.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
     eth.setIP(NETWORK_CONFIG);
-    var addr = eth.getIP();
-    console.log(addr);
-    
+    setTimeout(function(){
+      eth.setIP();
+      var addr = eth.getIP();
+      console.log(addr);
+    }, 1000);
+
+    // setup network client
     client = require("net");
     initNfcModule(nfc);
     setTimeout(function(){
         PIN_MDB_RST.set();
         logger('MDB SET');
 		PIN_DEV_READY.set();
-	},12000);
+	}, 12000);
 }
 
-
 E.on('init', function() {
-    //P13.reset();
     initPeripherial();
 });
