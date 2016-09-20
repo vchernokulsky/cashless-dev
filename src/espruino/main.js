@@ -267,6 +267,10 @@ function writeOffCommit(sContent) {
           "Content-Length":content.length
 		}
 	};
+	if(_respFailureCount > 6) {
+        logger('waiting for ethernet reboot');
+        return;
+      }
 	logger('Connecting to Server (writeOffCommit) ... ');
 	var timeoutId = setTimeout(function() {
         timeoutId = 'undefined';
@@ -389,8 +393,8 @@ function readChipIdFromRFID(uid, keyData, block, callback) {
         // try to get balance from server
         if ((typeof callback === 'function') && (isVendDone)) {
 			isVendDone = false;
-			//callback(++_sessionId, result);
-            callback(++_sessionId, '00112233445566778899AABBCCDDEEFF');
+			callback(++_sessionId, result);
+            //callback(++_sessionId, '00112233445566778899AABBCCDDEEFF');
         }
       });
     }
@@ -402,7 +406,8 @@ function startRFIDListening() {
   nfc.on('tag', function(error, data) {
     if (error) {
       logger('tag read error');
-      nfc.listen();
+      switchLeds([PIN_DEV_READY, PIN_NOT_ENOUGHT_MONEY, PIN_CARD_NOT_REGISTERED], true);  
+      //nfc.listen();
     } else {
       if(_respFailureCount > 6) {
         logger('waiting for ethernet reboot');
@@ -462,14 +467,14 @@ function initPeripherial() {
     PIN_ETH_IRQ.set();
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
-    //eth.setIP(SPORTLIFE_STATIC_ADDR);
-    eth.setIP({mac: "56:44:58:00:00:03"});
-    setTimeout(function(){
+    eth.setIP(SPORTLIFE_STATIC_ADDR);
+    //eth.setIP({mac: "56:44:58:00:00:03"});
+    /*setTimeout(function(){
       eth.setIP();
       logger(eth.getIP());
       logger("Ethernet module OK");
     }, 1000);
-
+	*/
     // setup RFID module
     if(nfc == 'undefined') {
       I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
