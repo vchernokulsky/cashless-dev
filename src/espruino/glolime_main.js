@@ -6,6 +6,9 @@ var isVendDone = true;
 var _sessionId = 0;
 var _failuresCount = 0;
 
+var _serialInterval = 'undefined';
+
+
 // WIFI configuration
 //var ssid = "VendexFree";
 //var pass = "vendex2016";
@@ -300,34 +303,32 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
         msg_str += msg[i];
     }
     console.log('MSG STR   :: ' + msg_str);
+
+    var timeoutId = setTimeout(function (arg) {
+      _failuresCount++;
+      console.log(' Timeout Error');
+      if (arg) {
+        arg.end();
+      }
+    }, 5000);
     client.connect({host: HOST, port: 6767},  function(socket) {
         console.log('Client connected');
         console.log('REQUEST :: ' + _getHexStr(msg));
         var s = "";
         buffer = [];
-        for (var i = 0; i < msg.length; i++)
-        {
+        for (var i = 0; i < msg.length; i++) {
 			s += String.fromCharCode(msg[i]);
 		}
-		//console.log('REQUEST str:: ' + s);
 		socket.write(s);
 		isRespGot = false;
-		setTimeout(function (arg) {
-        if (!isRespGot){
-			console.log(' Timeout Error');
-              if (arg) {
-                  arg.end();
-                  _failuresCount++;
-              }
-			} else {
-              console.log("data received");
-			}
-		}, 5000, socket);
-		socket.on('data', function(data){
-			// console.log('RESP:: ' + data);
+		socket.on('data', function(data) {
+            try {
+              clearTimeout(timeoutId);
+            } catch(ex) {
+              logger("Exception: " + ex);
+            }
 			var isComplete = false;
-			for(var i = 0; i < data.length; i++)
-			{
+			for(var i = 0; i < data.length; i++) {
               putByte(data.charCodeAt(i), null);
 			}
 		});
@@ -661,7 +662,8 @@ var command = '';
 var internalCmdBuf = '';
 // start Serial4 listening
 function startSerialListening() {
-    setInterval(function() {
+    logger("Start Serial4 listening for every 25ms");
+    _serialInterval = setInterval(function() {
         var chars = Serial4.available();
         if(chars > 0) {
 			internalCmdBuf += Serial4.read(chars); 
@@ -672,7 +674,7 @@ function startSerialListening() {
 				processTransportLayerCmd(command);
 			}
         }
-    }, 5);
+    }, 25);
 }
 
 // Init functions
