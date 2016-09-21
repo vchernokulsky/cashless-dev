@@ -11,6 +11,7 @@
 
 #define TX_BUFF_LENGH	256
 #define RX_BUFF_LENGH	256
+#define RX_BUFF_MASK    (RX_BUFF_LENGH-1)
 
 ////////////////////////////////////////////
 // declare peripheral structures
@@ -25,6 +26,8 @@ volatile uint8_t rx_buf[RX_BUFF_LENGH];
 volatile char asc[5];
 //
 volatile uint8_t last_dma_buff_idx = 0;
+
+char str_balance[RX_BUFF_LENGH];
 
 ////////////////////////////////////////////
 // function forward declarations
@@ -263,7 +266,35 @@ void USART2_DMA_Init(void) {
 	DMA_Cmd(DMA_USART2_Rx_Channel,ENABLE);
 }
 
+int get_user_balance() {
+	unsigned int i = 0, k = 0;
+	unsigned int val = 0;
+	char tmp[RX_BUFF_LENGH];
 
+	memset(tmp, 0x00, RX_BUFF_LENGH);
+	k = 0;
+	i = last_dma_buff_idx;
+	while((rx_buf[i]!=0x00)&&(rx_buf[i]!='\n'))
+	{
+		tmp[k] = rx_buf[i];
+		k++;
+		rx_buf[i] = 0x00;
+		i = ((i+1)&RX_BUFF_MASK);
+		last_dma_buff_idx = i;
+	}
+	if(rx_buf[i] == '\n') {
+		rx_buf[i] = 0x00;
+		strcat(str_balance, tmp);
+		val = atoi(str_balance);
+		memset(str_balance, 0x00, RX_BUFF_LENGH);
+		memset(tmp, 0x00, RX_BUFF_LENGH);
+		last_dma_buff_idx = ((i+1) & RX_BUFF_MASK);
+	}
+	strcat(str_balance, tmp);
+	return val;
+}
+
+/*
 int get_user_balance() {
 	unsigned int i = 0, k = 0;
 	unsigned int val = 0;
@@ -289,6 +320,8 @@ int get_user_balance() {
 	val = atoi(sBalance);
 	return val;
 }
+*/
+
 
 int get_espruino_started() {
 	int i = 0, k = 0;
