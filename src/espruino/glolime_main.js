@@ -292,6 +292,41 @@ function bytestuffToResp(array){
   return result;
 }
 
+function disableDevice() {
+  isEnabled = false;
+  PIN_DEV_READY.set();
+  PIN_NOT_ENOUGHT_MONEY.set();
+  PIN_CARD_NOT_REGISTERED.set();
+  clearInterval(_serialInterval);
+}
+
+function enableDevice() {
+  isEnabled = true;
+  PIN_DEV_READY.set();
+  PIN_NOT_ENOUGHT_MONEY.reset();
+  PIN_CARD_NOT_REGISTERED.reset();
+  startSerialListening();
+}
+
+function waitForServerWakeup() {
+   logger('Server waiting...');
+  _serverWakeupInterval = setInterval(function() {
+    var p = require('Ping');
+    p.ping({ address: HOST, port:6767, timeout:2000, attempts:2 }, function(err, data) {
+      if(data != 'undefined') {
+        logger('Server started!!!');
+        clearInterval(_serverWakeupInterval);
+        enableDevice();
+      }
+      else {
+        if(err != 'undefined') {
+          console.log('Server does not response');
+        }
+      }
+    });
+  }, 10000);
+}
+
 // to make and send message - request - to GloLime by socket 
 function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
     var msg = [], msg_str = "";
@@ -304,12 +339,15 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
     }
     console.log('MSG STR   :: ' + msg_str);
 
-    var timeoutId = setTimeout(function (arg) {
-      _failuresCount++;
-      console.log(' Timeout Error');
-      if (arg) {
-        arg.end();
+    var refSocket = 'undefined';
+    var timeoutId = setTimeout(function () {
+      logger('Timeout Error');
+      disableDevice();
+      waitForServerWakeup();
+      if(refSocket != 'undefined') {
+        refSocket.end();
       }
+      _failuresCount++;
     }, 5000);
     client.connect({host: HOST, port: 6767},  function(socket) {
         console.log('Client connected');
@@ -319,6 +357,7 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
         for (var i = 0; i < msg.length; i++) {
 			s += String.fromCharCode(msg[i]);
 		}
+        refSocket = socket;
 		socket.write(s);
 		isRespGot = false;
 		socket.on('data', function(data) {
@@ -372,16 +411,22 @@ function processGloLimeResponse(resp){
 						console.log(' :: tempBalance -> ' + tempBalance);
 						userType = resp.slice(8,9);
 						console.log(' :: userType    -> ' + userType);
-						// get Balance value in DEC
+						// get Balance value in DECreset
 						numBalance = processLitleEnd(tempBalance);
 						if(!isNaN(numBalance)) {
 							if (numBalance >= 2500){
 								isVendDone = false;       //vend session started
 								var balanceToSend = numBalance.toString(10)+"\n";
-								//console.log("  :: balanceToSend -> " + balanceToSend);
-								Serial4.write(balanceToSend);  
+								logger("  :: balanceToSend -> " + balanceToSend);
+								Serial4.write(balanceToSend);
+                                /*
+                                setTimeout(function(data){
+                                  Serial4.write(data);
+                                  logger("  :: balanceToSend -> " + data);
+                                },3000, balanceToSend);
+                                */
 								// start timer for VEND session
-								//isSessionTimeout = true;          
+								//isSessionTimeout = true;
 								//setTimeout(function(){
 								//  if(isSessionTimeout) {
 								//      console.log("SESSION TIMED OUT");
@@ -402,7 +447,7 @@ function processGloLimeResponse(resp){
 						// Buy command
 					break;
 					default:
-						
+
 					break;
 				}
 			break;
@@ -494,14 +539,14 @@ function makeCmdDataToGetBalance(cardType, cardUid){
 function makeCmdDataToBuy(_userId, _productId, _productPrice){
     var proIdToSend = [];
     proIdToSend[0] = _productId[0];
-    proIdToSend[1] = _productId[1];    
+    proIdToSend[1] = _productId[1];
     proIdToSend[2] = 0x00;
     proIdToSend[3] = 0x00;
     var prodPriceToSend = [];
     prodPriceToSend[0] = _productPrice[0];
     prodPriceToSend[1] = _productPrice[1];
     prodPriceToSend[2] = 0x00;
-    prodPriceToSend[3] = 0x00;    
+    prodPriceToSend[3] = 0x00;
     return (_userId.concat(proIdToSend).concat(prodPriceToSend));
 }
 
@@ -580,10 +625,6 @@ function _getHexStr(data) {
   return str;
 }
 
-function fireParseComplete(){
-	//console.log(_getHexStr(buffer));
-}
-
 // functions for calculation CRC16_X25
 function crc16_ccitt(bytes){
     var crc = initialValue;
@@ -639,16 +680,18 @@ function startRFIDListening() {
 		if (error) {
 			print('tag read error');
 		} else {
-			buffer = [];
-			console.log(' ========================================= ');
-			console.log('UID        :: ' + data.uid);
-			uidToSend = processUidToSend(data.uid);
-			console.log('UID in HEX :: ' + uidToSend);
 			// Request to GloLime for get Balance value
-            if (isVendDone){
-                sendMsgToGloLime(0x01, frameId, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
-                frameId++;
-                userIdLittleEndian = [];
+            logger('isEnabled: ' + isEnabled + '   isVendDone: ' + isVendDone);
+            if (isEnabled && isVendDone){
+              buffer = [];
+              console.log(' ========================================= ');
+              console.log('UID        :: ' + data.uid);
+              uidToSend = processUidToSend(data.uid);
+              console.log('UID in HEX :: ' + uidToSend);
+
+              sendMsgToGloLime(0x01, frameId, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
+              frameId++;
+              userIdLittleEndian = [];
             }
 		}
 		// каждые 1000 миллисекунд слушаем новую метку
@@ -666,13 +709,14 @@ function startSerialListening() {
     _serialInterval = setInterval(function() {
         var chars = Serial4.available();
         if(chars > 0) {
-			internalCmdBuf += Serial4.read(chars); 
-			var lastIdx = internalCmdBuf.indexOf('\n');
-			if(lastIdx > 0) {
-				command = internalCmdBuf.slice(0, lastIdx);
-				internalCmdBuf = internalCmdBuf.slice(lastIdx, internalCmdBuf.length-1);
-				processTransportLayerCmd(command);
-			}
+			internalCmdBuf += Serial4.read(chars);
+        }
+        var lastIdx = internalCmdBuf.indexOf('\n');
+        if(lastIdx > 0) {
+          command = internalCmdBuf.slice(0, lastIdx);
+          internalCmdBuf = internalCmdBuf.slice(lastIdx+1, internalCmdBuf.length-1);
+          //logger('COMMAND: ' + command);
+          processTransportLayerCmd(command);
         }
     }, 25);
 }
@@ -687,8 +731,6 @@ function nfcInit(error){
       console.log('Clear interval RFID...');
       clearInterval(idRFID);
       // start peripherial
-      //P13.set();
-      //PIN_MDB_RST.set();
       nfc.listen();
       startRFIDListening();
       startSerialListening();
@@ -712,8 +754,6 @@ function initNfcModule(nfc) {
               console.log('Clear interval RFID...');
               clearInterval(idRFID);
               // start peripherial
-              //P13.set();
-              //PIN_MDB_RST.set();
               nfc.listen();
               startRFIDListening();
               startSerialListening();
