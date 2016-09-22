@@ -1,3 +1,4 @@
+var nfc = null;
 var balance = "";
 
 var isEnabled = false;
@@ -7,7 +8,10 @@ var _sessionId = 0;
 var _failuresCount = 0;
 
 var _serialInterval = 'undefined';
+var _serverWakeupInterval = 'undefined';
+var _vendBlinkerInterval = 'undefined';
 
+var _internalCommTimeout = 'undefined';
 
 // WIFI configuration
 //var ssid = "VendexFree";
@@ -28,10 +32,10 @@ var GPIO4                   = P4;
 var GPIO5                   = P3;
 
 // Network configuration
-var HOST = "192.168.0.5";
+var HOST = "192.168.0.192";
 //var NETWORK_CONFIG = {mac: "56:44:58:0:0:10", ip: "192.168.20.205", subnet: "255.255.255.0", gateway: "192.168.20.1", dns: "192.168.20.1"};
 var NETWORK_CONFIG = {mac: "56:44:58:0:0:06"};
-
+var HOST_PING_TIMEOUT = 25000;
 
 // ---------------------------------------------------------------
 // -- begin variables for <cmd parser>
@@ -156,13 +160,38 @@ var isWiFiOk  = false;
 
 // For setInterval to check WiFi and RFID/NFC
 var idWiFi, idRFID;
-// ---------------------------------------------------------------
+
+function _getHexStr(data) {
+  var str = '';
+  for(var i=0; i<data.length; i++) {
+    str += ('0x' + data[i].toString(16) + ' ');
+  }
+  return str;
+}
+
+function switchLed(led, state) {
+  if(state) {
+    led.set();
+  }
+  else {
+    led.reset();
+  }
+}
 
 function singleBlink(led, timeout){
-	led.set();
+	switchLed(led, true);
 	setTimeout(function(){
-		led.reset();
-	},timeout);
+		switchLed(led, false);
+	}, timeout);
+}
+
+function startBlinker(led, period) {
+  var blinkFlag = false;
+  var intervalId = setInterval(function(){
+    blinkFlag = !blinkFlag;
+    switchLed(led, blinkFlag);
+  }, period, blinkFlag);
+  return intervalId;
 }
 
 function uintToByteArray(/*long*/long) {
@@ -173,25 +202,23 @@ function uintToByteArray(/*long*/long) {
         byteArray [ index ] = byte;
         long = (long - byte) / 256 ;
     }
-
     return byteArray;
 }
 
-var PREFIX_LEN = 5;
 function processTransportLayerCmd(cmd) {
-    //var prefix = cmd.substr(0, PREFIX_LEN);
     var array = cmd.split(':');
     var prefix = array[0];
     switch(prefix) {
+      case 'BALANCE':
+        logger('Balance ACK recieved');
+        break;
       case 'ENABLE':          //ENABLE:\n
         isEnabled = true;
         isVendDone = true;
+        PIN_DEV_READY.set();
         logger('ENABLE recieved');
-        //LED notification
-        LED1.set();
-        setTimeout(function(){LED1.reset();}, 3000);
         break;
-      case 'DISABLE':       //DISABLE:\n  
+      case 'DISABLE':       //DISABLE:\n
         isEnabled = false;
         logger('DISABLE received');
         break;
@@ -199,19 +226,33 @@ function processTransportLayerCmd(cmd) {
         str_product_id = array[1];
         str_product_price = array[2];
         isVendDone = true;
-        //isSessionTimeout = false;
         logger('VEND INFO | PRODUCT ID: ' + str_product_id + '   PRODUCT PRICE: ' + parseInt(str_product_price, 10)/100);
-        product_id = uintToByteArray(parseInt(str_product_id)+1);
-        product_price = uintToByteArray(parseInt(str_product_price));
+        product_id = uintToByteArray(parseInt(str_product_id, 10)+1);
+        product_price = uintToByteArray(parseInt(str_product_price, 10));
         sendMsgToGloLime(0x01, frameId, 0x02, makeCmdDataToBuy(userIdLittleEndian, product_id, product_price));
         frameId++;
+
+        clearInterval(_vendBlinkerInterval);
+        _vendBlinkerInterval = 'undefined';
         break;
       case 'CANCEL':          //CANCEL:\n
         isVendDone = true;
+        clearInterval(_vendBlinkerInterval);
+        _vendBlinkerInterval = 'undefined';
         logger('CANCEL recieved');
         break;
       default:
-        logger('LOG: ' + cmd);
+        //FIXME: change to balance ACK message
+        if(cmd.length <=10 ) {
+          var respInt = parseInt(cmd, 10);
+          if(!isNaN(respInt)) {
+            clearTimeout(_internalCommTimeout);
+            logger('Balance echo: ' + cmd);
+          }
+        }
+        else {
+          logger('LOG: ' + cmd);
+        }
     }
 }
 
@@ -236,17 +277,14 @@ function makeGloLimeRespArray (_addr, _frameId, _cmdCode, cmdData){
 	array[2] = _cmdCode;
 
 	var i = 0, j = 3;
-	for (i = 0, j = 3; i < cmdData.length; i++, j++)
-	{
+    for (i = 0, j = 3; i < cmdData.length; i++, j++) {
 		array[j] = cmdData[i];
-        //console.log('array[' + j + '] = ' + array[j]);
 	}
 
 	var checksum = crc16_ccitt(array);
 
     // bytestuffing
     array_bf = bytestuffToResp(array);
-    //console.log('array_bf  ' + array_bf);
 
     // добавить CRC
     var tmp1 = (checksum >> 8);
@@ -254,9 +292,7 @@ function makeGloLimeRespArray (_addr, _frameId, _cmdCode, cmdData){
     array_bf[array_bf.length] = tmp2;
 	array_bf[array_bf.length] = tmp1;
 
-    // добавить PRE и POST
     result = addPrePostAmble(array_bf);
-    //console.log('Result  ' + result );
     return result;
 }
 
@@ -297,7 +333,10 @@ function disableDevice() {
   PIN_DEV_READY.set();
   PIN_NOT_ENOUGHT_MONEY.set();
   PIN_CARD_NOT_REGISTERED.set();
-  clearInterval(_serialInterval);
+  if(_serialInterval != 'undefined') {
+    clearInterval(_serialInterval);
+    _serialInterval = 'undefined';
+  }
 }
 
 function enableDevice() {
@@ -310,21 +349,29 @@ function enableDevice() {
 
 function waitForServerWakeup() {
    logger('Server waiting...');
+  _pingInterval = startBlinker(PIN_CARD_NOT_REGISTERED, 500);
   _serverWakeupInterval = setInterval(function() {
     var p = require('Ping');
     p.ping({ address: HOST, port:6767, timeout:2000, attempts:2 }, function(err, data) {
       if(data != 'undefined') {
         logger('Server started!!!');
-        clearInterval(_serverWakeupInterval);
+        if(_serverWakeupInterval != 'undefined') {
+          clearInterval(_serverWakeupInterval);
+          _serverWakeupInterval = 'undefined';
+        }
+        if(_pingInterval != 'undefined') {
+          clearInterval(_pingInterval);
+          _pingInterval = 'undefined';
+        }
         enableDevice();
       }
       else {
         if(err != 'undefined') {
-          console.log('Server does not response');
+          console.log('Server does not respond');
         }
       }
     });
-  }, 10000);
+  }, HOST_PING_TIMEOUT);
 }
 
 // to make and send message - request - to GloLime by socket 
@@ -372,8 +419,7 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
 			}
 		});
 		socket.on('close',function(){
-			console.log('WARNING :: Socket connection closed! ');
-			//processGloLimeResponse(buffer);
+			console.log('Socket connection closed! ');
 		});
     });
 }
@@ -384,20 +430,17 @@ function processGloLimeResponse(resp){
 	console.log('RESPONSE:: ' + _getHexStr(resp));
 	if (checkCRC16_CCITT(resp)){
 		switch (comandCode){
-			case 0x01:
-			  // get Balance command
-			  console.log(' ==> Process resp on | GetBalance | cmd ');
-			  break;
-			case 0x02:
-			  // Buy command
-			  console.log(' ==> Process resp on | makeBuy | cmd ');
-			  break;
+			case 0x01: // Get balance command
+              logger(' ==> Process resp on | GetBalance | cmd ');
+              break;
+			case 0x02: // Buy command
+              logger(' ==> Process resp on | makeBuy | cmd ');
+              break;
 			default:
-			  console.log(' ==> Cmd code in GloLimeResp unknown ');
-			  break;
+              logger(' ==> Cmd code in GloLimeResp unknown ');
+              break;
 		}
 		cmdExitCode = resp[3];
-		//console.log(' cmdExitCode' + cmdExitCode);
 		switch (cmdExitCode){
 			case ERROR_OK:
 				console.log(' ==> Operation successful');
@@ -406,42 +449,32 @@ function processGloLimeResponse(resp){
 						// getBalance command
 						userIdLittleEndian = resp.slice(4,8);
 						userId = processLitleEnd(resp.slice(4,8));
-						//console.log(' :: userId -> ' + userId);
 						var tempBalance = resp.slice(9,13);
 						console.log(' :: tempBalance -> ' + tempBalance);
 						userType = resp.slice(8,9);
 						console.log(' :: userType    -> ' + userType);
-						// get Balance value in DECreset
 						numBalance = processLitleEnd(tempBalance);
 						if(!isNaN(numBalance)) {
-							if (numBalance >= 2500){
-								isVendDone = false;       //vend session started
+							if (numBalance >= 2500) {
+								//isVendDone = false;       //vend session started
 								var balanceToSend = numBalance.toString(10)+"\n";
 								logger("  :: balanceToSend -> " + balanceToSend);
+                                //TODO: change to balance ACK
+                                _internalCommTimeout = setTimeout(function(){
+                                  logger('ERROR: Balance ACK timeout');
+                                  isVendDone = true;
+                                  clearInterval(_vendBlinkerInterval);
+                                  _vendBlinkerInterval = 'undefined';
+                                }, 2000);
 								Serial4.write(balanceToSend);
-                                /*
-                                setTimeout(function(data){
-                                  Serial4.write(data);
-                                  logger("  :: balanceToSend -> " + data);
-                                },3000, balanceToSend);
-                                */
-								// start timer for VEND session
-								//isSessionTimeout = true;
-								//setTimeout(function(){
-								//  if(isSessionTimeout) {
-								//      console.log("SESSION TIMED OUT");
-								//      isVendDone = true;   //vend session closed
-								//      isSessionTimeout = false;
-								//  }
-								//}, 40000);
 							} else {
 								console.log("Attention:: Not enought money");
 								singleBlink(PIN_NOT_ENOUGHT_MONEY,5000);
 							}
 						} else {
-							console.log("Recieved incorrect data");
+							logger("Recieved incorrect data");
 						}
-						console.log(' :: numBalance  -> ' + numBalance);
+						logger(' :: numBalance  -> ' + numBalance);
 					break;
 					case 2:
 						// Buy command
@@ -474,18 +507,18 @@ function processGloLimeResponse(resp){
 				singleBlink(PIN_NOT_ENOUGHT_MONEY,5000);
 			break;
 			case ERROR_NON_EXISTENT_PRODUCT:
-				console.log('ERROR: PRODUCT IS NON EXISTENT');
+				console.log('ERROR: PRODUCT DOES NOT EXIST');
 			break;
 			case ERROR_NON_EXISTENT_USER:
-				console.log('ERROR: USER IS NON EXISTENT');
+				console.log('ERROR: USER DOES NOT EXIST');
 			break;
 			case ERROR_NON_EXISTENT_SALE:
-				console.log('ERROR: SALE IS NON EXISTENT');
+				console.log('ERROR: SALE DOES NOT EXIST');
 			break;
 			case ERROR_NOT_REGISTERED_CARD:
-				console.log('ERROR: CARD IS NOT REGISTERED');
-				singleBlink(PIN_CARD_NOT_REGISTERED,5000);
-			break;	
+				console.log('ERROR: CARD DOES NOT REGISTERED');
+				singleBlink(PIN_CARD_NOT_REGISTERED, 5000);
+			break;
 			default:
 				console.log('Unknown comand exit code');
 			break;
@@ -495,13 +528,10 @@ function processGloLimeResponse(resp){
 
 function checkCRC16_CCITT(resp){
     var respCrc = [resp[resp.length-1], resp[resp.length-2]];
-    //console.log(' CRC in resp: ' + respCrc);
     var toCalcCRC = resp.slice(0,(resp.length-2));
-    //console.log(' to calc crc ' + toCalcCRC);
     var currCrc = crc16_ccitt(toCalcCRC);
     var tmp1 = (currCrc >> 8);
     var tmp2 = (currCrc & 0x00FF);
-    //console.log(' Current CRC: ' + tmp1 + ' ' + tmp2);
     if (tmp1 != respCrc[0]){
       console.log(' !Attention! CRC is not correct');
       return false;
@@ -552,23 +582,17 @@ function makeCmdDataToBuy(_userId, _productId, _productPrice){
 
 function processUidToSend(uid){
     var str = "", result = [], temp = "";
-    //console.log(uid);
-    for (var i = 0; i < uid.length; i++)
-    {
+    for (var i = 0; i < uid.length; i++) {
         temp = uid[i].toString(16);
         if (temp.length < 2){
             temp = "0" + temp;
         }
         str += temp;
     }
-    //console.log('uid in str::  ' + str);
-    for (var j = 0; j < str.length; j++)
-    {
+    for (var j = 0; j < str.length; j++) {
         result[j] = str.charCodeAt(j);
-        //console.log("result[j] :: " + result[j]);
-    }    
+    }
     result[result.length] = 0;
-    //console.log("result :: " + result);
     return result;
 }
 
@@ -586,11 +610,9 @@ function putByte(cmdByte, callback){
 			parser_state = END_STATE;
             isRespGot = true;
             processGloLimeResponse(buffer);
-            //console.log('!!!' + buffer);
             if(callback == 'function') {
               callback();
             }
-            //buffer = [];
 			break;
 		default:
 			processByte(cmdByte);
@@ -601,12 +623,9 @@ function putByte(cmdByte, callback){
 function processByte(cmdByte){
 	switch (parser_state){
 		case BEGIN_STATE:
-			// add to end buffer cmdByte
 			buffer = buffer.concat(cmdByte);
 			break;
 		case ESCSUM_STATE:
-			// add to end buffer EscSum[cmdByte]
-            //console.log('EscSum' + EscSum);
 			buffer = buffer.concat(EscSum[cmdByte]);
 			logger(' => buffer.length = ' + buffer.length);
 			parser_state = BEGIN_STATE;
@@ -615,14 +634,6 @@ function processByte(cmdByte){
 			//
 			break;
 	}
-}
-
-function _getHexStr(data) {
-  var str = '';
-  for(var i=0; i<data.length; i++) {
-    str += ('0x' + data[i].toString(16) + ' ');
-  }
-  return str;
 }
 
 // functions for calculation CRC16_X25
@@ -670,31 +681,24 @@ function Reflect8(val){
     return resByte;
 }
 
-var nfc = null;
-
-// start RFID listening
 function startRFIDListening() {
-	// обработка взаимодействия с RFID меткой
 	nfc.on('tag', function(error, data) {
         logger("Frame ID:" + frameId + "  Failures count:" + _failuresCount);
 		if (error) {
 			print('tag read error');
+            //TODO: nfc reader reinitialization
 		} else {
-			// Request to GloLime for get Balance value
             logger('isEnabled: ' + isEnabled + '   isVendDone: ' + isVendDone);
             if (isEnabled && isVendDone){
               buffer = [];
-              console.log(' ========================================= ');
-              console.log('UID        :: ' + data.uid);
               uidToSend = processUidToSend(data.uid);
-              console.log('UID in HEX :: ' + uidToSend);
-
+              isVendDone = false;       //vend session started
+              _vendBlinkerInterval = startBlinker(PIN_DEV_READY, 500);
               sendMsgToGloLime(0x01, frameId, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
               frameId++;
               userIdLittleEndian = [];
             }
 		}
-		// каждые 1000 миллисекунд слушаем новую метку
 		setTimeout(function () {
 			nfc.listen();
 		}, 3500);
@@ -715,7 +719,6 @@ function startSerialListening() {
         if(lastIdx > 0) {
           command = internalCmdBuf.slice(0, lastIdx);
           internalCmdBuf = internalCmdBuf.slice(lastIdx+1, internalCmdBuf.length-1);
-          //logger('COMMAND: ' + command);
           processTransportLayerCmd(command);
         }
     }, 25);
@@ -730,8 +733,7 @@ function nfcInit(error){
       isRFIDOk = true;
       console.log('Clear interval RFID...');
       clearInterval(idRFID);
-      // start peripherial
-      nfc.listen();
+      //nfc.listen();  <--WTF?
       startRFIDListening();
       startSerialListening();
   }
@@ -739,7 +741,6 @@ function nfcInit(error){
 
 function initNfcModule(nfc) {
     console.log("! Starting NFC module");
-    //nfc.wakeUp(nfcInit);
     // waiting for RFID wake up
     idRFID = setInterval(function () {
       if (!isRFIDOk){
@@ -793,12 +794,12 @@ function initPeripherial() {
     client = require("net");
     initNfcModule(nfc);
     setTimeout(function(){
-        PIN_MDB_RST.set();
-        logger('MDB SET');
-		PIN_DEV_READY.set();
+      PIN_MDB_RST.set();
+      logger('MDB SET');
 	}, 12000);
 }
 
 E.on('init', function() {
-    initPeripherial();
+  E.enableWatchdog(10, true);
+  initPeripherial();
 });
