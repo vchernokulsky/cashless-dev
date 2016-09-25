@@ -6,6 +6,8 @@
 #include "stm32f0xx_conf.h"
 #include "stm32f0xx_it.h"
 
+#include "internal_usart_comm.h"
+
 #define DMA_USART2_Tx_Channel	DMA1_Channel4
 #define DMA_USART2_Rx_Channel	DMA1_Channel5
 
@@ -26,6 +28,7 @@ volatile uint8_t rx_buf[RX_BUFF_LENGH];
 volatile char asc[5];
 //
 volatile uint8_t last_dma_buff_idx = 0;
+volatile unsigned char cmd_bytes_count = 0;
 
 char str_balance[RX_BUFF_LENGH];
 
@@ -216,11 +219,20 @@ void USART2_Send(uint16_t data)
 
 void USART2_Send_String(const char *str)
 {
+	//unsigned short idx, k;
+	//unsigned short curDataCounter;
+
 	DMA_Cmd(DMA_USART2_Tx_Channel, DISABLE);
+
+	/*curDataCounter = DMA_GetCurrDataCounter(DMA_USART2_Tx_Channel);
+	for(idx=curDataCounter, k=0; k<strlen(str); idx++, k++) {
+		txbuf[idx] = str[k];
+	}
+	txbuf[idx+1] = 0x00;
+	*/
 	memset((void*)txbuf, 0, TX_BUFF_LENGH);
 	strcat((char*)txbuf, str);
 	DMA_SetCurrDataCounter(DMA_USART2_Tx_Channel, strlen((void*)txbuf));
-	//DMA_SetCurrDataCounter(DMA_USART2_Tx_Channel, strlen(txbuf));
 	DMA_Cmd(DMA_USART2_Tx_Channel, ENABLE);
 	return;
 }
@@ -277,18 +289,31 @@ int get_user_balance() {
 	while((rx_buf[i]!=0x00)&&(rx_buf[i]!='\n'))
 	{
 		tmp[k] = rx_buf[i];
-		k++;
 		rx_buf[i] = 0x00;
+		k++;
 		i = ((i+1)&RX_BUFF_MASK);
 		last_dma_buff_idx = i;
+		cmd_bytes_count++;
 	}
-	if(rx_buf[i] == '\n') {
+	//command read correct
+	if(rx_buf[last_dma_buff_idx] == '\n') {
 		rx_buf[i] = 0x00;
+		cmd_bytes_count = 0;
 		strcat(str_balance, tmp);
 		val = atoi(str_balance);
+		//FOR LOGGING ONLY
+		strcat(str_balance, "\n");
+		send_to_espruino(str_balance, strlen(str_balance));
+		//-----
 		memset(str_balance, 0x00, RX_BUFF_LENGH);
 		memset(tmp, 0x00, RX_BUFF_LENGH);
 		last_dma_buff_idx = ((i+1) & RX_BUFF_MASK);
+	}
+	//ERROR: command length very big
+	if(cmd_bytes_count > 11) {
+		cmd_bytes_count = 0;
+		memset(str_balance, 0x00, RX_BUFF_LENGH);
+		memset(tmp, 0x00, RX_BUFF_LENGH);
 	}
 	strcat(str_balance, tmp);
 	return val;

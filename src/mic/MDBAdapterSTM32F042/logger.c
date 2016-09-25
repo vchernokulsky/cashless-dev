@@ -17,7 +17,7 @@ void log(const char *msg) {
 #if defined(__PLATFORM_PC__)
 	printf("%s", msg);
 #elif defined(__PLATFORM_STM32__)
-	USART2_Send_String(msg);
+	//USART2_Send_String(msg);
 #endif
 }
 
