@@ -13,10 +13,6 @@ var _vendBlinkerInterval = 'undefined';
 
 var _internalCommTimeout = 'undefined';
 
-// WIFI configuration
-//var ssid = "VendexFree";
-//var pass = "vendex2016";
-
 var PIN_RFID_IRQ = P10;  // P10
 var PIN_MDB_RST  = P13;  // P13
 var PIN_ETH_IRQ  = P1;
@@ -37,12 +33,10 @@ var HOST = "192.168.0.5";
 var NETWORK_CONFIG = {mac: "56:44:58:0:0:06"};
 var HOST_PING_TIMEOUT = 25000;
 
-// ---------------------------------------------------------------
-// -- begin variables for <cmd parser>
 var PREAMBLE  = 0xFD;
 var ESC       = 0xFF;
 var POSTAMBLE = 0xFE;
-// parser states 
+
 var BEGIN_STATE  = 1;
 var ESCSUM_STATE = 2;
 var END_STATE    = 3;
@@ -55,28 +49,17 @@ function logger(msg) {
     //Serial2.write(msg + "\r\n");
 }
 
-// For GloLime server response
-var buffer = new Array();
-
-// For bytestuffing process
+var buffer = new Array(0);
 var EscSum = new Uint8Array([0xFF, 0xFE, 0xFD]);
-// -- end variables for <cmd parser>
 
-// -- begin variables for <GloLimeResponse>
-var //addr,
-	//frameId,
-	//cmdCode,
-	errorCode,
-	//cmdData, // byte[] _cmdData
-	crc16; // byte[] _cmdData
-// -- end variables for <GloLimeResponse>
+var errorCode,
+	crc16;
 
-// Error Codes definitions for GloLime response
 var ERROR_OK                = 0x00,
     ERROR_INVALID_CRC       = 0xFF,
     ERROR_INVALID_COMMAND   = 0xFE,
     ERROR_INVALID_PARAMETER = 0xFD,
-	// additional errors codes
+
 	ERROR_INSUFFICIENT_FUNDS   = 0xFB, // недостаточно средств 
 	ERROR_NON_EXISTENT_PRODUCT = 0XFA, // несуществующий продукт ??
 	ERROR_NON_EXISTENT_USER    = 0XF9, // несуществующий пользователь
@@ -137,16 +120,14 @@ var width        = 16;
 var finalXorVal  = 0xFFFF;
 
 // HEX user's UID for Request to GloLime
-var uidToSend; 
+var uidToSend;
 
 var gloLimeResponse = [];
 
 // For communications
 var client, wifi;
 
-// userId from GloLime resp (DEC)
 var userId;
-// userId in LittleEndian format
 var userIdLittleEndian;
 var userType;
 
@@ -249,8 +230,11 @@ function processTransportLayerCmd(cmd) {
         if(cmd.length <=10 ) {
           var respInt = parseInt(cmd, 10);
           if(!isNaN(respInt)) {
-            clearTimeout(_internalCommTimeout);
-            logger('Balance echo: ' + cmd);
+            if(_internalCommTimeout != 'undefined') {
+              logger('Balance echo: ' + cmd);
+              clearTimeout(_internalCommTimeout);
+              _internalCommTimeout = 'undefined';
+            }
           }
         }
         else {
@@ -262,8 +246,7 @@ function processTransportLayerCmd(cmd) {
 function makeCmdDataToGetBalance(cardType, cardUid){
     var data = [];
     data[0] = cardType;
-    for (var i = 1, j = 0; i < (cardUid.length+1); i++, j++)
-    {
+    for (var i = 1, j = 0; i < (cardUid.length+1); i++, j++) {
         data[i] = cardUid[j];
     }
     return data;
@@ -384,14 +367,10 @@ function waitForServerWakeup() {
   }, HOST_PING_TIMEOUT);
 }
 
-// to make and send message - request - to GloLime by socket 
 function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
     var msg = [], msg_str = "";
-    //console.log('CmdData    :: ' + cmdData);
     msg = makeGloLimeRespArray(address, _frameId, comandCode, cmdData);
-    //console.log('MSG array:: ' + msg);
-    for (var i = 0; i < msg.length; i++)
-    {
+    for (var i = 0; i < msg.length; i++) {
         msg_str += msg[i];
     }
     console.log('MSG STR   :: ' + msg_str);
@@ -399,11 +378,21 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
     var refSocket = 'undefined';
     var timeoutId = setTimeout(function () {
       logger('Timeout Error');
-      waitForServerWakeup();
+      _failuresCount++;
+      if((_failuresCount%3) === 0) {
+        waitForServerWakeup();
+      }
+      else {
+        if(_vendBlinkerInterval != 'undefined') {
+          clearInterval(_vendBlinkerInterval);
+          _vendBlinkerInterval = 'undefined';
+        }
+        isVendDone = true;
+      }
+
       if(refSocket != 'undefined') {
         refSocket.end();
       }
-      _failuresCount++;
     }, 5000);
     client.connect({host: HOST, port: 6767},  function(socket) {
         console.log('Client connected');
@@ -551,13 +540,13 @@ function processGloLimeResponse(resp){
 	}
 }
 
-function checkCRC16_CCITT(resp){
+function checkCRC16_CCITT(resp) {
     var respCrc = [resp[resp.length-1], resp[resp.length-2]];
     var toCalcCRC = resp.slice(0,(resp.length-2));
     var currCrc = crc16_ccitt(toCalcCRC);
     var tmp1 = (currCrc >> 8);
     var tmp2 = (currCrc & 0x00FF);
-    if (tmp1 != respCrc[0]){
+    if (tmp1 != respCrc[0]) {
       console.log(' !Attention! CRC is not correct');
       return false;
     } else {
@@ -571,11 +560,11 @@ function checkCRC16_CCITT(resp){
 }
 
 // return HEX value
-function processLitleEnd(array){
+function processLitleEnd(array) {
   var str = "";
   var tmp = array.reverse();
   for(var i=0; i<tmp.length; i++) {
-    str += tmp[i].toString(16); 
+    str += tmp[i].toString(16);
   }
   return parseInt(str, 16);
 }
@@ -583,8 +572,7 @@ function processLitleEnd(array){
 function makeCmdDataToGetBalance(cardType, cardUid){
     var data = [];
     data[0] = cardType;
-    for (var i = 1, j = 0; i < (cardUid.length+1); i++, j++)
-    {
+    for (var i = 1, j = 0; i < (cardUid.length+1); i++, j++) {
         data[i] = cardUid[j];
     }
     return data;
@@ -609,7 +597,7 @@ function processUidToSend(uid){
     var str = "", result = [], temp = "";
     for (var i = 0; i < uid.length; i++) {
         temp = uid[i].toString(16);
-        if (temp.length < 2){
+        if (temp.length < 2) {
             temp = "0" + temp;
         }
         str += temp;
@@ -646,7 +634,7 @@ function putByte(cmdByte, callback){
 }
 
 function processByte(cmdByte){
-	switch (parser_state){
+	switch (parser_state) {
 		case BEGIN_STATE:
 			buffer = buffer.concat(cmdByte);
 			break;
@@ -683,10 +671,8 @@ function crc16_ccitt(bytes){
 
 function ReflectGeneric(val, width){
     var resByte = 0;
-    for (var i = 0; i < width; i++)
-    {
-        if ((val & (1 << i)) !== 0)
-        {
+    for (var i = 0; i < width; i++) {
+        if ((val & (1 << i)) !== 0) {
             resByte |= (1 << ((width-1) - i));
         }
     }
@@ -696,10 +682,8 @@ function ReflectGeneric(val, width){
 function Reflect8(val){
     var resByte = 0;
 
-    for (var i = 0; i < 8; i++)
-    {
-        if ((val & (1 << i)) !== 0)
-        {
+    for (var i = 0; i < 8; i++) {
+        if ((val & (1 << i)) !== 0) {
             resByte |= ( (1 << (7 - i)) & 0xFF);
         }
     }
@@ -793,7 +777,7 @@ function initNfcModule(nfc) {
     }, 5000);
 }
 
-function initPeripherial() {
+function initialize() {
     console.log("... peripherial initialising ... ");
     PIN_MDB_RST.reset();
 	PIN_DEV_READY.reset();
@@ -830,5 +814,10 @@ function initPeripherial() {
 
 E.on('init', function() {
   E.enableWatchdog(10, true);
-  initPeripherial();
+  process.on('uncaughtException', function() {
+    console.log('Uncaught Exception!!!');
+    reset();
+    load();
+  });
+  initialize();
 });
