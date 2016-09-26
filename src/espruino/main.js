@@ -52,8 +52,9 @@ var _vendSessionTimeout;
 var _respFailureCount = 0;
 var _networkFailureCount = 0;
 
-var _commitInterval;
-var _serialInterval;
+var _commitInterval = 'undefined';
+var _serialInterval = 'undefined';
+var _balanceAckTimeout = 'undefined';
 
 // simple helper functions
 function logger(msg) {
@@ -218,30 +219,14 @@ function setBalance(sessionId, chipId, price) {
 			writeoffId = Resp;
 			logger("Response: " + writeoffId);
 			if ((writeoffId.length < 10) && (parseInt(writeoffId, 10) > 0)) {
-                PIN_DEV_READY.set();  // green led on
-				Serial4.write("3000\n");  //fixed balance for SportLife (30RUB)
+                PIN_DEV_READY.set();            // green led on
+				Serial4.write("3000\n");        //fixed balance for SportLife (30RUB)
+                _balanceAckTimeout = setTimeout(function(){
+                  logger('Balance ACK timed out');
+                  PIN_DEV_READY.reset();
+                  nfc.listen();
+                }, 1000);
 				logger("Send 30RUB to nucleo");
-                _vendSessionTimeout = setTimeout(function(){
-                  if (!isVendDone) {
-                    switchLeds([PIN_DEV_READY, PIN_NOT_ENOUGHT_MONEY, PIN_CARD_NOT_REGISTERED], true);
-                    clearInterval(_commitInterval);
-                    _respFailureCount = 0;
-                    setTimeout(function() {
-                      initPeripherial();
-                      startSerialListening();
-                      _commitInterval = setInterval(function() {
-                        if(commitQueue.length > 0) {
-                          logger('Queue length: ' + commitQueue.length);
-                          writeOffCommit(commitQueue[0]);
-                        } else {
-                          logger("Queue is empty");
-                        }
-                      }, 10000);
-                    }, 500);
-                    logger('VEND SESSION TIMEOUT <RFID TOUCHED>');
-                    }
-                },60000);
-                logger("Wait timeout for session: " + sessionId + " timeout id: " + _vendSessionTimeout);
 			} else {
                 processPesponse(writeoffId);
                 isVendDone = true;
@@ -267,10 +252,6 @@ function writeOffCommit(sContent) {
           "Content-Length":content.length
 		}
 	};
-	if(_respFailureCount > 6) {
-        logger('waiting for ethernet reboot');
-        return;
-      }
 	logger('Connecting to Server (writeOffCommit) ... ');
 	var timeoutId = setTimeout(function() {
         timeoutId = 'undefined';
@@ -307,15 +288,10 @@ function processTransportLayerCmd(cmd) {
     var prefix = array[0];
     switch(prefix) {
       case 'ENABLE':          //ENABLE
-        if(isEnabled && _vendSessionTimeout != 'undefined') {
-          logger("processTransportLayerCmd() | ENABLE | clear vend session timeout");
-          clearTimeout(_vendSessionTimeout);
-        }
         isEnabled = true;
         isVendDone = true;
         switchLeds([PIN_DEV_READY, PIN_NOT_ENOUGHT_MONEY, PIN_CARD_NOT_REGISTERED], false);
         nfc.listen();
-        //singleBlink(LED1, 3000);
         logger('ENABLE recieved');
         break;
       case 'DISABLE':
@@ -331,8 +307,11 @@ function processTransportLayerCmd(cmd) {
           PIN_DEV_READY.reset();
           nfc.listen();
         }, PRODUCT_DISPENSE_TIMEOUT);
-        logger("Clear timeout for session: " + _sessionId + " timeout id: " + _vendSessionTimeout);
-        clearTimeout(_vendSessionTimeout);
+        if(_vendSessionTimeout != 'undefined') {
+          logger("Clear timeout for session: " + _sessionId + " timeout id: " + _vendSessionTimeout);
+          clearTimeout(_vendSessionTimeout);
+          _vendSessionTimeout = 'undefined';
+        }
 		commitQueue[commitQueue.length] =
 			"dev=" + DEVICE_ID +
 			"&chip=" + chip +
@@ -341,11 +320,16 @@ function processTransportLayerCmd(cmd) {
         break;
       case 'CANCEL':          //RESET
         logger('CANCEL recieved');
-        PIN_DEV_READY.reset();
-        isVendDone = true;
-        nfc.listen();
-        logger("Clear timeout for session: " + _sessionId + " timeout id: " + _vendSessionTimeout);
-        clearTimeout(_vendSessionTimeout);
+        setTimeout(function(){
+          PIN_DEV_READY.reset();
+          isVendDone = true;
+          nfc.listen();
+        }, 1500);
+        if(_vendSessionTimeout != 'undefined') {
+          logger("Clear timeout for session: " + _sessionId + " timeout id: " + _vendSessionTimeout);
+          clearTimeout(_vendSessionTimeout);
+          _vendSessionTimeout = 'undefined';
+        }
 		commitQueue[commitQueue.length] =
 			"dev=" + DEVICE_ID +
 			"&chip=" + chip +
@@ -353,7 +337,14 @@ function processTransportLayerCmd(cmd) {
 			"&success=" + VEND_SESSION_TIMEOUT;
         break;
       default:
-        //just log message
+        if(cmd.length < 11) {
+          if(!isNaN(parseInt(cmd, 10))) {
+            if(_balanceAckTimeout != 'undefined') {
+              clearTimeout(_balanceAckTimeout);
+              _balanceAckTimeout = 'undefined';
+            }
+          }
+        }
         logger('LOG: ' + cmd);
     }
 }
@@ -370,9 +361,6 @@ function readChipIdFromRFID(uid, keyData, block, callback) {
       logger('Block auth error');
       isVendDone = true;
       nfc.listen();
-      //TODO: remove test chipId
-      //isVendDone = false;
-      //callback(++_sessionId, '00112233445566778899AABBCCDDEEFF');
     }
     else {
       nfc.readBlock(block, function(error, data) {
@@ -406,13 +394,10 @@ function startRFIDListening() {
   nfc.on('tag', function(error, data) {
     if (error) {
       logger('tag read error');
-      switchLeds([PIN_DEV_READY, PIN_NOT_ENOUGHT_MONEY, PIN_CARD_NOT_REGISTERED], true);  
-      //nfc.listen();
+      switchLeds([PIN_DEV_READY, PIN_NOT_ENOUGHT_MONEY, PIN_CARD_NOT_REGISTERED], true);
+      reset();
+      load();
     } else {
-      if(_respFailureCount > 6) {
-        logger('waiting for ethernet reboot');
-        return;
-      }
       logger('RFID touched');
       logger('=> isEnabled = ' + isEnabled + '; isVendDone =' + isVendDone);
       //TODO: convert UID to correct chipid
@@ -429,10 +414,11 @@ function startRFIDListening() {
   });
 }
 
+var COMM_INTERVAL = 10;
 var command = '';
 var buffer  = '';
 function startSerialListening() {
-    logger("Start reading Serial4 for every 25ms");
+    logger("Start reading Serial4 for every " + COMM_INTERVAL + "ms");
     _serialInterval = setInterval(function() {
         var chars = Serial4.available();
         if(chars > 0) {
@@ -444,7 +430,7 @@ function startSerialListening() {
             processTransportLayerCmd(command);
           }
         }
-    }, 25);
+    }, COMM_INTERVAL);
 }
 
 function initPeripherial() {
@@ -454,7 +440,6 @@ function initPeripherial() {
     switchLeds([PIN_DEV_READY, PIN_NOT_ENOUGHT_MONEY, PIN_CARD_NOT_REGISTERED], true);
 
     PIN_MDB_RST.reset();
-
     // setup USART interfaces
     // Serial2.setup(115200);   //logger serial port
     if(nfc == 'undefined') {
@@ -468,13 +453,14 @@ function initPeripherial() {
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
     eth.setIP(SPORTLIFE_STATIC_ADDR);
-    //eth.setIP({mac: "56:44:58:00:00:03"});
-    /*setTimeout(function(){
+    /*
+    eth.setIP({mac: "56:44:58:00:00:03"});
+    setTimeout(function(){
       eth.setIP();
       logger(eth.getIP());
       logger("Ethernet module OK");
     }, 1000);
-	*/
+    */
     // setup RFID module
     if(nfc == 'undefined') {
       I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
@@ -486,7 +472,6 @@ function initPeripherial() {
           logger('RFID wake up OK');
           startRFIDListening();
           setTimeout(function(){
-              //switchLeds([PIN_DEV_READY, PIN_NOT_ENOUGHT_MONEY, PIN_CARD_NOT_REGISTERED], false);
               PIN_MDB_RST.set();
               logger('MDB SET');
           }, 12000);
@@ -495,7 +480,6 @@ function initPeripherial() {
     }
     else {
       setTimeout(function(){
-        //switchLeds([PIN_DEV_READY, PIN_NOT_ENOUGHT_MONEY, PIN_CARD_NOT_REGISTERED], false);
         PIN_MDB_RST.set();
         logger('MDB SET');
         data = Serial4.read(17);
@@ -503,25 +487,8 @@ function initPeripherial() {
     }
 }
 
-
-/*
-isEnabled = false;
-isVendDone = true;
-initPeripherial();
-startSerialListening();
-setInterval(function(){
-  PIN_ETH_RST.reset();
-  setTimeout(function(){
-    //clearInterval(_serialInterval);
-    initPeripherial();
-    startSerialListening();
-  }, 500);
-}, 30000);
-*/
-
-
-
 E.on('init', function() {
+    E.enableWatchdog(10, true);
     initPeripherial();
     startSerialListening();
     _commitInterval = setInterval(function() {
@@ -532,27 +499,4 @@ E.on('init', function() {
         logger("Queue is empty");
       }
     }, 10000);
-
-    setInterval(function(){
-      logger("Response failures count: " + _respFailureCount);
-      if((_respFailureCount > 6)&&isVendDone) {
-        clearInterval(_commitInterval);
-        _networkFailureCount += _respFailureCount;
-        logger("Total network failures count: " + _networkFailureCount);
-        _respFailureCount = 0;
-        PIN_ETH_RST.reset();
-        setTimeout(function() {
-          initPeripherial();
-          startSerialListening();
-          _commitInterval = setInterval(function() {
-            if(commitQueue.length > 0) {
-              logger('Queue length: ' + commitQueue.length);
-              writeOffCommit(commitQueue[0]);
-            } else {
-              logger("Queue is empty");
-            }
-          }, 10000);
-        }, 500);
-      }
-  }, 10000);
 });
