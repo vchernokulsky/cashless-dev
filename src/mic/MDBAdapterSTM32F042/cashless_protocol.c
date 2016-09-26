@@ -104,8 +104,7 @@ void process_inactive(unsigned char* data) {
 			fill_mdb_command(&delay_cmd, resp_config_data, 9);
 			fill_mdb_command(&resp, resp_ack, 1);
 			send_mdb_command(&resp);
-			log(
-					"(INACTIVE)|RECV:SETUP [config data] ; SEND: ACK; DELAY: CONFIG DATA\n");
+			log("(INACTIVE)|RECV:SETUP [config data] ; SEND: ACK; DELAY: CONFIG DATA\n");
 			break;
 		case 0x01: // Max / Min Price
 			fill_mdb_command(&resp, resp_ack, 1);
@@ -122,8 +121,7 @@ void process_inactive(unsigned char* data) {
 			send_mdb_command(&resp);
 			fill_mdb_command(&delay_cmd, resp_request_id, 31);
 			_delay_state = ST_DISABLED;
-			log(
-					"(INACTIVE)|RECV:EXPANSION [request id]; SEND: ACK; DELAY: DEV ID\n");
+			log("(INACTIVE)|RECV:EXPANSION [request id]; SEND: ACK; DELAY: DEV ID\n");
 			break;
 		}
 		break;
