@@ -93,6 +93,73 @@ var isWiFiOk  = false;
 
 // For setInterval to check WiFi and RFID/NFC
 var idWiFi, idRFID;
+//device states
+var INACTIVE,	
+	ENABLED,
+	DISABLED,
+	VEND,
+	CONNECT_LOST;
+// default device state
+var dev_state = INACTIVE;
+function process_state(){
+	switch(dev_state){
+		case INACTIVE:
+		
+			break;
+		case ENABLED:
+		
+			break;
+		case DISABLED:
+		
+			break;
+		case VEND:
+		
+			break;
+		case CONNECT_LOST:
+		
+			break;
+		default:
+
+			break;	
+	}
+	
+};
+
+function process_enabled(){
+	isEnabled = true;
+	isVendDone = true;
+	PIN_DEV_READY.set();
+};
+function process_vend(str_product_id,str_product_price){
+	
+	
+};
+function process_idle(){
+	
+};
+function process_disable(){
+	
+};
+function process_connectLost(){
+	
+};
+
+function clearVendBlinker(idBlinkerInterval){
+	if(idBlinkerInterval != 'undefined') {
+	  clearInterval(idBlinkerInterval);
+	  idBlinkerInterval = 'undefined';
+	  PIN_DEV_READY.set();
+	}	
+};
+
+function clearCommBlinker(idCommInterval){
+	if(idCommInterval != 'undefined') {
+	  logger('Balance echo: ' + cmd);
+	  clearTimeout(idCommInterval);
+	  idCommInterval = 'undefined';
+	}
+};
+
 
 function _getHexStr(data) {
   var str = '';
@@ -146,10 +213,8 @@ function processTransportLayerCmd(cmd) {
         logger('Balance ACK recieved');
         break;
       case 'ENABLE':          //ENABLE:\n
-        isEnabled = true;
-        isVendDone = true;
-        PIN_DEV_READY.set();
-        logger('ENABLE recieved');
+        process_enabled();
+		logger('ENABLE recieved');
         break;
       case 'DISABLE':       //DISABLE:\n
         isEnabled = false;
@@ -158,25 +223,17 @@ function processTransportLayerCmd(cmd) {
       case 'VEND':          //VEND:<PRODUCT ID>:<PRODUCT PRICE>\n
         str_product_id = array[1];
         str_product_price = array[2];
-        isVendDone = true;
-        logger('VEND INFO | PRODUCT ID: ' + str_product_id + '   PRODUCT PRICE: ' + parseInt(str_product_price, 10)/100);
-        product_id = uintToByteArray(parseInt(str_product_id, 10)+1);
-        product_price = uintToByteArray(parseInt(str_product_price, 10));
-        sendMsgToGloLime(0x01, frameId, 0x02, makeCmdDataToBuy(userIdLittleEndian, product_id, product_price));
-        frameId++;
-        if(_vendBlinkerInterval != 'undefined') {
-          clearInterval(_vendBlinkerInterval);
-          _vendBlinkerInterval = 'undefined';
-          PIN_DEV_READY.set();
-        }
+		process_vend();
+		logger('VEND INFO | PRODUCT ID: ' + str_product_id + '   PRODUCT PRICE: ' + parseInt(str_product_price, 10)/100);
+		product_id = uintToByteArray(parseInt(str_product_id, 10)+1);
+		product_price = uintToByteArray(parseInt(str_product_price, 10));
+		sendMsgToGloLime(0x01, frameId, 0x02, makeCmdDataToBuy(userIdLittleEndian, product_id, product_price));
+		frameId++;
+		clearVendBlinker(_vendBlinkerInterval);
         break;
       case 'CANCEL':          //CANCEL:\n
-        isVendDone = true;
-        if(_vendBlinkerInterval != 'undefined') {
-          clearInterval(_vendBlinkerInterval);
-          _vendBlinkerInterval = 'undefined';
-          PIN_DEV_READY.set();
-        }
+		clearVendBlinker(_vendBlinkerInterval);
+		process_enabled();
         logger('CANCEL recieved');
         break;
       default:
@@ -184,11 +241,7 @@ function processTransportLayerCmd(cmd) {
         if(cmd.length <=10 ) {
           var respInt = parseInt(cmd, 10);
           if(!isNaN(respInt)) {
-            if(_internalCommTimeout != 'undefined') {
-              logger('Balance echo: ' + cmd);
-              clearTimeout(_internalCommTimeout);
-              _internalCommTimeout = 'undefined';
-            }
+			clearCommBlinker(_internalCommTimeout);
           }
         }
         else {
@@ -221,7 +274,7 @@ function makeGloLimeRespArray (_addr, _frameId, _cmdCode, cmdData){
 		array[j] = cmdData[i];
 	}
 
-	var checksum = crc.calculate(array);//crc16_ccitt(array);
+	var checksum = crc.calculate(array);
 
     // bytestuffing
     array_bf = bytestuffToResp(array);
@@ -337,11 +390,8 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
         waitForServerWakeup();
       }
       else {
-        if(_vendBlinkerInterval != 'undefined') {
-          clearInterval(_vendBlinkerInterval);
-          _vendBlinkerInterval = 'undefined';
-        }
-        isVendDone = true;
+		clearVendBlinker(_vendBlinkerInterval);
+        isVendDone = true; // enable 
       }
 
       if(refSocket != 'undefined') {
