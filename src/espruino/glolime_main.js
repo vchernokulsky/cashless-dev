@@ -30,8 +30,8 @@ var GPIO5                   = P3;
 
 // Network configuration
 var HOST = "192.168.0.5";
-//var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.20.205", subnet: "255.255.255.0", gateway: "192.168.20.1", dns: "192.168.20.1"};
-var NETWORK_CONFIG = {mac: "56:44:58:0:0:06"};
+var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.20.205", subnet: "255.255.255.0", gateway: "192.168.20.1", dns: "192.168.20.1"};
+//var NETWORK_CONFIG = {mac: "56:44:58:0:0:06"};
 var HOST_PING_TIMEOUT = 25000;
 
 var PREAMBLE  = 0xFD;
@@ -663,6 +663,7 @@ function initialize() {
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
     eth.setIP(NETWORK_CONFIG);
+	logger(eth.getIP());
 	crc = require("CRC16").create();
     client = require("net");
     initNfcModule(nfc);
@@ -672,6 +673,48 @@ function initialize() {
 	}, 12000);
 }
 
+function checkNetworkConfig(params){
+  var i = 0, j = 0;
+  var tmp;
+  for (i = 0; i < params.length; i++){
+    console.log('params[i] = ' + params[i]);
+    tmp = params[i].split('.');
+    console.log('tmp = ' + tmp);
+    if (tmp.length == 4){
+      for (j = 0; j < tmp.length; j++){
+        console.log('tmp[i] = ' + tmp[j]);
+        if (isNaN(parseInt(tmp[j],10))) {
+          console.log('f:: tmp[i] = ' + tmp[j]);
+          return false;
+        }
+      }
+    } else {
+      console.log('f:: tmp.length = ' + tmp.length);
+      return false;
+    }
+  }
+  return true;
+}
+
+function loadNetworkConfig(){
+  var flash = require('Flash');
+  var settings;
+  var addr_free_mem = flash.getFree();
+  addr = addr_free_mem[0].addr;
+  var data_1 = flash.read(48, addr);
+  settings = String.fromCharCode.apply(null, new Uint8Array(data_1));
+  var param = settings.split('|');
+  console.log(param); //TODO: check param!!!
+  if (checkNetworkConfig(param.slice(0,3))){
+    HOST = param[0];
+    NETWORK_CONFIG.ip = param[1];
+    NETWORK_CONFIG.mask = param[2];
+  } else {
+    console.log('NetworkConf uncorrect');
+  }
+}
+
+
 E.on('init', function() {
   E.enableWatchdog(10, true);
   process.on('uncaughtException', function() {
@@ -680,5 +723,6 @@ E.on('init', function() {
     load();
   });
   blinkCarousel();
+  loadNetworkConfig();
   initialize();
 });
