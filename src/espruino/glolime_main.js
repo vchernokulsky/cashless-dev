@@ -93,73 +93,34 @@ var isWiFiOk  = false;
 
 // For setInterval to check WiFi and RFID/NFC
 var idWiFi, idRFID;
-//device states
-var INACTIVE,	
-	ENABLED,
-	DISABLED,
-	VEND,
-	CONNECT_LOST;
-// default device state
-var dev_state = INACTIVE;
-function process_state(){
-	switch(dev_state){
-		case INACTIVE:
-		
-			break;
-		case ENABLED:
-		
-			break;
-		case DISABLED:
-		
-			break;
-		case VEND:
-		
-			break;
-		case CONNECT_LOST:
-		
-			break;
-		default:
 
-			break;	
-	}
-	
-};
 
-function process_enabled(){
-	isEnabled = true;
-	isVendDone = true;
-	PIN_DEV_READY.set();
-};
-function process_vend(str_product_id,str_product_price){
-	
-	
-};
-function process_idle(){
-	
-};
-function process_disable(){
-	
-};
-function process_connectLost(){
-	
-};
+function disableDevice() {
+  isEnabled = false;
+  isVendDone = true;
+  PIN_DEV_READY.reset();
+  PIN_NOT_ENOUGHT_MONEY.reset();
+  PIN_CARD_NOT_REGISTERED.reset();
+}
 
-function clearVendBlinker(idBlinkerInterval){
-	if(idBlinkerInterval != 'undefined') {
-	  clearInterval(idBlinkerInterval);
-	  idBlinkerInterval = 'undefined';
-	  PIN_DEV_READY.set();
-	}	
-};
+function enableDevice() {
+  isEnabled = true;
+  isVendDone = true;
+  PIN_DEV_READY.set();
+  PIN_NOT_ENOUGHT_MONEY.reset();
+  PIN_CARD_NOT_REGISTERED.reset();
+}
 
-function clearCommBlinker(idCommInterval){
-	if(idCommInterval != 'undefined') {
-	  logger('Balance echo: ' + cmd);
-	  clearTimeout(idCommInterval);
-	  idCommInterval = 'undefined';
-	}
-};
+function failureDevice() {
+  isEnabled = false;
+  PIN_DEV_READY.set();
+  PIN_NOT_ENOUGHT_MONEY.set();
+  PIN_CARD_NOT_REGISTERED.set();
+}
 
+function deviceVend(){
+
+}
 
 function _getHexStr(data) {
   var str = '';
@@ -194,6 +155,13 @@ function startBlinker(led, period) {
   return intervalId;
 }
 
+function stopBlinker(intervalId) {
+	if(intervalId != 'undefined') {
+      clearInterval(intervalId);
+      intervalId = 'undefined';
+	}
+}
+
 function uintToByteArray(/*long*/long) {
     // we want to represent the input as a 8-bytes array
     var byteArray = [0, 0, 0, 0];
@@ -213,27 +181,25 @@ function processTransportLayerCmd(cmd) {
         logger('Balance ACK recieved');
         break;
       case 'ENABLE':          //ENABLE:\n
-        process_enabled();
+        enableDevice();
 		logger('ENABLE recieved');
         break;
       case 'DISABLE':       //DISABLE:\n
-        isEnabled = false;
+        disableDevice();
         logger('DISABLE received');
         break;
       case 'VEND':          //VEND:<PRODUCT ID>:<PRODUCT PRICE>\n
         str_product_id = array[1];
         str_product_price = array[2];
-		process_vend();
 		logger('VEND INFO | PRODUCT ID: ' + str_product_id + '   PRODUCT PRICE: ' + parseInt(str_product_price, 10)/100);
 		product_id = uintToByteArray(parseInt(str_product_id, 10)+1);
 		product_price = uintToByteArray(parseInt(str_product_price, 10));
 		sendMsgToGloLime(0x01, frameId, 0x02, makeCmdDataToBuy(userIdLittleEndian, product_id, product_price));
-		frameId++;
-		clearVendBlinker(_vendBlinkerInterval);
+        frameId++; //<--??
         break;
       case 'CANCEL':          //CANCEL:\n
-		clearVendBlinker(_vendBlinkerInterval);
-		process_enabled();
+		stopBlinker(_vendBlinkerInterval);
+		enableDevice();
         logger('CANCEL recieved');
         break;
       default:
@@ -241,7 +207,8 @@ function processTransportLayerCmd(cmd) {
         if(cmd.length <=10 ) {
           var respInt = parseInt(cmd, 10);
           if(!isNaN(respInt)) {
-			clearCommBlinker(_internalCommTimeout);
+			stopBlinker(_internalCommTimeout);
+            logger('Balance echo: ' + cmd);
           }
         }
         else {
@@ -321,33 +288,10 @@ function bytestuffToResp(array){
   return result;
 }
 
-function disableDevice() {
-  isEnabled = false;
-  PIN_DEV_READY.set();
-  PIN_NOT_ENOUGHT_MONEY.set();
-  PIN_CARD_NOT_REGISTERED.set();
-  if(_serialInterval != 'undefined') {
-    clearInterval(_serialInterval);
-    _serialInterval = 'undefined';
-  }
-}
-
-function enableDevice() {
-  isEnabled = true;
-  isVendDone = true; //<-- ???
-  PIN_DEV_READY.set();
-  PIN_NOT_ENOUGHT_MONEY.reset();
-  PIN_CARD_NOT_REGISTERED.reset();
-  startSerialListening();
-}
-
 function waitForServerWakeup() {
   logger('Server waiting...');
-  if(_vendBlinkerInterval != 'undefined') {
-    clearInterval(_vendBlinkerInterval);
-    _vendBlinkerInterval = 'undefined';
-  }
-  disableDevice();
+  stopBlinker(_vendBlinkerInterval);
+  failureDevice();
 
   _pingInterval = startBlinker(PIN_CARD_NOT_REGISTERED, 500);
   _serverWakeupInterval = setInterval(function() {
@@ -355,15 +299,10 @@ function waitForServerWakeup() {
     p.ping({ address: HOST, port:6767, timeout:2000, attempts:2 }, function(err, data) {
       if(data != 'undefined') {
         logger('Server started!!!');
-        if(_serverWakeupInterval != 'undefined') {
-          clearInterval(_serverWakeupInterval);
-          _serverWakeupInterval = 'undefined';
-        }
-        if(_pingInterval != 'undefined') {
-          clearInterval(_pingInterval);
-          _pingInterval = 'undefined';
-        }
+        stopBlinker(_serverWakeupInterval);
+        stopBlinker(_pingInterval); //TODO: incorrect function name
         enableDevice();
+        //startSerialListening();
       }
       else {
         if(err != 'undefined') {
@@ -390,8 +329,8 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
         waitForServerWakeup();
       }
       else {
-		clearVendBlinker(_vendBlinkerInterval);
-        isVendDone = true; // enable 
+		stopBlinker(_vendBlinkerInterval);
+        enableDevice();
       }
 
       if(refSocket != 'undefined') {
@@ -408,7 +347,6 @@ function sendMsgToGloLime(address, _frameId, comandCode, cmdData){
 		}
         refSocket = socket;
 		socket.write(s);
-		isRespGot = false;
 		socket.on('data', function(data) {
             try {
               clearTimeout(timeoutId);
@@ -451,39 +389,31 @@ function processGloLimeResponse(resp){
               userIdLittleEndian = resp.slice(4,8);
               userId = processLitleEnd(resp.slice(4,8));
               var tempBalance = resp.slice(9,13);
-              console.log(' :: tempBalance -> ' + tempBalance);
               userType = resp.slice(8,9);
               console.log(' :: userType    -> ' + userType);
               numBalance = processLitleEnd(tempBalance);
               if(!isNaN(numBalance)) {
                 if (numBalance >= 2500) {
-                  //isVendDone = false;       //vend session started
                   var balanceToSend = numBalance.toString(10)+"\n";
                   logger("  :: balanceToSend -> " + balanceToSend);
                   //TODO: change to balance ACK
                   Serial4.write(balanceToSend);
                   _internalCommTimeout = setTimeout(function(){
                     logger('ERROR: Balance ACK timeout');
-                    isVendDone = true;
-                    if(_vendBlinkerInterval != 'undefined') {
-                      clearInterval(_vendBlinkerInterval);
-                      _vendBlinkerInterval = 'undefined';
-                    }
+                    stopBlinker(_vendBlinkerInterval);
+                    enableDevice();
                   }, 2000);
-
                 } else {
                   console.log("Attention:: Not enought money");
-                  singleBlink(PIN_NOT_ENOUGHT_MONEY,5000);
-                  if(_vendBlinkerInterval != 'undefined') {
-                    clearInterval(_vendBlinkerInterval);
-                    _vendBlinkerInterval = 'undefined';
-                  }
-                  isVendDone = true;
+                  stopBlinker(_vendBlinkerInterval);
+                  enableDevice();
+                  singleBlink(PIN_NOT_ENOUGHT_MONEY, 5000);
                 }
               } else {
-                logger("Recieved incorrect data");
+                logger("Recieved incorrect data: " + numBalance);
+                stopBlinker(_vendBlinkerInterval);
+                enableDevice();
               }
-              logger(' :: numBalance  -> ' + numBalance);
               break;
             case 2:
               // Buy command
@@ -494,6 +424,8 @@ function processGloLimeResponse(resp){
           }
         }
         else {
+          stopBlinker(_vendBlinkerInterval);
+          enableDevice();
           switch (cmdExitCode){
               case ERROR_INVALID_CRC:
                 console.log('ERROR: CRC incorrect');
@@ -535,11 +467,6 @@ function processGloLimeResponse(resp){
                   console.log('Unknown comand exit code');
               break;
           }
-          if(_vendBlinkerInterval != 'undefined') {
-            clearInterval(_vendBlinkerInterval);
-            _vendBlinkerInterval = 'undefined';
-          }
-          isVendDone = true;
         }
 	}
 }
@@ -724,8 +651,6 @@ function initialize() {
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
     eth.setIP(NETWORK_CONFIG);
 	crc = require("CRC16").create();
-    logger("CRC module : ");
-    logger(crc);
     client = require("net");
     initNfcModule(nfc);
     setTimeout(function(){
