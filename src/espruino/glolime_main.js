@@ -12,6 +12,7 @@ var _serverWakeupInterval = 'undefined';
 var _vendBlinkerInterval = 'undefined';
 
 var _internalCommTimeout = 'undefined';
+var _carouselTimeout = 'undefined';
 
 var PIN_RFID_IRQ = P10;  // P10
 var PIN_MDB_RST  = P13;  // P13
@@ -87,7 +88,6 @@ var userType;
 var productId;
 
 // For setting communication
-var isRespGot = false;
 var isRFIDOk  = false;
 var isWiFiOk  = false;
 
@@ -118,10 +118,6 @@ function failureDevice() {
   PIN_CARD_NOT_REGISTERED.set();
 }
 
-function deviceVend(){
-
-}
-
 function _getHexStr(data) {
   var str = '';
   for(var i=0; i<data.length; i++) {
@@ -137,6 +133,20 @@ function switchLed(led, state) {
   else {
     led.reset();
   }
+}
+
+function blinkCarousel() {
+  PIN_CARD_NOT_REGISTERED.reset();
+  PIN_DEV_READY.set();
+  _carouselTimeout = setTimeout(function() {
+    PIN_DEV_READY.reset();
+    PIN_NOT_ENOUGHT_MONEY.set();
+    _carouselTimeout = setTimeout(function() {
+      PIN_NOT_ENOUGHT_MONEY.reset();
+      PIN_CARD_NOT_REGISTERED.set();
+      _carouselTimeout = setTimeout(blinkCarousel, 250);
+    }, 250);
+  }, 250);
 }
 
 function singleBlink(led, timeout){
@@ -181,6 +191,10 @@ function processTransportLayerCmd(cmd) {
         logger('Balance ACK recieved');
         break;
       case 'ENABLE':          //ENABLE:\n
+        if(_carouselTimeout != 'undefined') {
+          clearTimeout(_carouselTimeout);
+          _carouselTimeout = 'undefined';
+        }
         enableDevice();
 		logger('ENABLE recieved');
         break;
@@ -390,12 +404,12 @@ function processGloLimeResponse(resp){
               userId = processLitleEnd(resp.slice(4,8));
               var tempBalance = resp.slice(9,13);
               userType = resp.slice(8,9);
-              console.log(' :: userType    -> ' + userType);
+              console.log(' :: userType      -> ' + userType);
               numBalance = processLitleEnd(tempBalance);
               if(!isNaN(numBalance)) {
                 if (numBalance >= 2500) {
                   var balanceToSend = numBalance.toString(10)+"\n";
-                  logger("  :: balanceToSend -> " + balanceToSend);
+                  logger(" :: balanceToSend -> " + balanceToSend);
                   //TODO: change to balance ACK
                   Serial4.write(balanceToSend);
                   _internalCommTimeout = setTimeout(function(){
@@ -533,7 +547,6 @@ function putByte(cmdByte, callback){
 			break;
 		case POSTAMBLE:
 			parser_state = END_STATE;
-            isRespGot = true;
             processGloLimeResponse(buffer);
             if(callback == 'function') {
               callback();
@@ -666,5 +679,6 @@ E.on('init', function() {
     reset();
     load();
   });
+  blinkCarousel();
   initialize();
 });
