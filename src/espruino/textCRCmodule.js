@@ -673,7 +673,7 @@ function initialize() {
     SPI2.setup({mosi:B15, miso:B14, sck:B13});
     eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
     eth.setIP(NETWORK_CONFIG);
-	crc = require("CRC16");
+	crc = require("CRC16").create();
     logger("CRC module : ");
     logger(crc);
     client = require("net");

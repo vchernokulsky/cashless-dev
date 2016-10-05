@@ -1,4 +1,4 @@
-function CRC16() {
+var CRC16 = function CRC16() {
 	this._initialValue = 0xffff;
 	this._castMask     = 0xFFFF;
 	this._width        = 16;
@@ -52,59 +52,54 @@ function CRC16() {
 CRC16.prototype.check = function(data) {
     var respCrc = [data[data.length-1], data[data.length-2]];
     var toCalcCRC = data.slice(0,(data.length-2));
-    var currCrc = crc16_ccitt(toCalcCRC);
+    var currCrc = this.calculate(toCalcCRC);
     var tmp1 = (currCrc >> 8);
     var tmp2 = (currCrc & 0x00FF);
     if (tmp1 != respCrc[0]) {
-      console.log(' !Attention! CRC is not correct');
       return false;
     } else {
       if (tmp2 != respCrc[1]){
-        console.log(' !Attention! CRC is not correct');
         return false;
       }
-      console.log(' ==> CRC is correct');
       return true;
     }
-}
+};
 
 CRC16.prototype.calculate = function(data){
 	var crc = this._initialValue;
-    for (var i = 0; i < data.length; i++)
-    {
+    for (var i = 0; i < data.length; i++) {
         var curByte = data[i] & 0xFF;
-        curByte = this._Reflect8(curByte);
+        curByte = this._reflect8(curByte);
         crc = (crc ^ (curByte << (this._width- 8))) & this._castMask;
         var pos = (crc >> (this._width- 8)) & 0xFF;
         crc = (crc << 8) & this._castMask;
         crc = (crc ^ this._crcTable[pos]) & this._castMask;
     }
-	crc =this._ReflectGeneric(crc, width);
+	crc =this._reflectGeneric(crc);
     return ((crc ^ this._finalXorVal) & this._castMask);
-}
+};
 
-CRC16.prototype._ReflectGeneric = function(val, width){
+CRC16.prototype._reflectGeneric = function(val){
     var resByte = 0;
-    for (var i = 0; i < width; i++) {
+    for (var i = 0; i < this._width; i++) {
         if ((val & (1 << i)) !== 0) {
-            resByte |= (1 << ((width-1) - i));
+            resByte |= (1 << ((this._width-1) - i));
         }
     }
     return resByte;
-}
+};
 
-CRC16.prototype._Reflect8 = function(val){
+CRC16.prototype._reflect8 = function(val){
     var resByte = 0;
-
     for (var i = 0; i < 8; i++) {
         if ((val & (1 << i)) !== 0) {
             resByte |= ( (1 << (7 - i)) & 0xFF);
         }
     }
     return resByte;
-}
+};
 
 // Export method for create object
 exports.create = function() {
     return new CRC16();
-}
+};
