@@ -30,7 +30,7 @@ var GPIO5                   = P3;
 
 // Network configuration
 var HOST = "192.168.0.5";
-var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.20.205", subnet: "255.255.255.0", gateway: "192.168.20.1", dns: "192.168.20.1"};
+var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.0.205", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "192.168.0.1"};
 //var NETWORK_CONFIG = {mac: "56:44:58:0:0:06"};
 var HOST_PING_TIMEOUT = 25000;
 
@@ -256,11 +256,7 @@ function makeGloLimeRespArray (_addr, _frameId, _cmdCode, cmdData){
 	}
 
 	var checksum = crc.calculate(array);
-
-    // bytestuffing
     array_bf = bytestuffToResp(array);
-
-    // добавить CRC
     var tmp1 = (checksum >> 8);
     var tmp2 = (checksum & 0x00FF);
     array_bf[array_bf.length] = tmp2;
@@ -316,7 +312,6 @@ function waitForServerWakeup() {
         stopBlinker(_serverWakeupInterval);
         stopBlinker(_pingInterval); //TODO: incorrect function name
         enableDevice();
-        //startSerialListening();
       }
       else {
         if(err != 'undefined') {
@@ -602,7 +597,6 @@ function startRFIDListening() {
 
 var command = '';
 var internalCmdBuf = '';
-// start Serial4 listening
 function startSerialListening() {
     logger("Start Serial4 listening for every 25ms");
     _serialInterval = setInterval(function() {
@@ -673,47 +667,92 @@ function initialize() {
 	}, 12000);
 }
 
-function checkNetworkConfig(params){
-  var i = 0, j = 0;
-  var tmp;
-  for (i = 0; i < params.length; i++){
-    console.log('params[i] = ' + params[i]);
-    tmp = params[i].split('.');
-    console.log('tmp = ' + tmp);
-    if (tmp.length == 4){
-      for (j = 0; j < tmp.length; j++){
-        console.log('tmp[i] = ' + tmp[j]);
-        if (isNaN(parseInt(tmp[j],10))) {
-          console.log('f:: tmp[i] = ' + tmp[j]);
-          return false;
-        }
-      }
-    } else {
-      console.log('f:: tmp.length = ' + tmp.length);
-      return false;
-    }
-  }
-  return true;
-}
 
 function loadNetworkConfig(){
   var flash = require('Flash');
-  var settings;
+  var data, settings;
   var addr_free_mem = flash.getFree();
   addr = addr_free_mem[0].addr;
-  var data_1 = flash.read(48, addr);
-  settings = String.fromCharCode.apply(null, new Uint8Array(data_1));
-  var param = settings.split('|');
-  console.log(param); //TODO: check param!!!
-  if (checkNetworkConfig(param.slice(0,3))){
-    HOST = param[0];
-    NETWORK_CONFIG.ip = param[1];
-    NETWORK_CONFIG.mask = param[2];
+  var data_1 = flash.read(160, addr);
+  data = ab2str(data_1);
+  settings = JSON.parse(data);
+  if (settings){
+    HOST = settings.host;
+    NETWORK_CONFIG.ip = settings.netconfig.ip;
+    NETWORK_CONFIG.mac = settings.netconfig.mac;
+    NETWORK_CONFIG.subnet = settings.netconfig.subnet;
+    NETWORK_CONFIG.gateway = settings.netconfig.gateway;
+    NETWORK_CONFIG.dns = settings.netconfig.dns;
+    console.log("HOST = " + HOST + "  NETWORK_CONFIG = " + NETWORK_CONFIG);
   } else {
-    console.log('NetworkConf uncorrect');
+    console.log("Read config info from Flash ERROR");
   }
 }
 
+function ab2str(buf) {
+  var str = "";
+  for (var i = 0; i < buf.length; i++){
+    str+=String.fromCharCode(buf[i]);
+  }
+  return str;
+}
+
+function str2ab(str) {
+  var buf = new ArrayBuffer(str.length); // 2 bytes for each char
+  var bufView = new Uint8Array(buf);
+  var strLen=str.length;
+  for (var i=0; i<strLen; i++) {
+    bufView[i] = str.charCodeAt(i);
+  }
+  return buf;
+}
+
+var toWriteInFlash = new Uint8Array(0);
+var cmdSerial6 = "";
+var bufferSerial6 = "";
+Serial6.setup(115200);
+Serial6.on('data', function(data) {
+  failureDevice();
+  bufferSerial6 += data;
+  var idx = bufferSerial6.indexOf('\n');
+  if(idx > 0) {
+    cmdSerial6 = bufferSerial6.slice(0, idx);
+    bufferSerial6 = bufferSerial6.slice(idx, bufferSerial6.length-1);
+    cmdSerial6 = cmdSerial6.trim();
+    processSerial6Data();
+  }
+});
+
+function processSerial6Data(){
+	var result = JSON.parse(cmdSerial6);
+    console.log(" ===> Result from UART: ");
+    console.log(result);
+    writeInFlash();
+}
+
+function writeInFlash(){
+  var toWriteInFlash = str2ab(cmdSerial6);
+	var l = toWriteInFlash.length + (4-toWriteInFlash.length%4);
+	var buf = new Uint8Array(l);
+	var i, j;
+	for (i = 0; i<l;i++){
+      if (i>toWriteInFlash.length)
+		buf[i] = 0;
+      else
+		buf[i] = toWriteInFlash[i];
+	}
+	var flash = require('Flash');
+	var addr_free_mem = flash.getFree();
+	var addr = addr_free_mem[0].addr;
+	console.log(" Writing ... ");
+	flash.erasePage(addr);
+	flash.write(buf, addr);
+	console.log(" Writing done! ");
+    bufferSerial6 = "";
+	reset();
+    load();
+    enableDevice();
+}
 
 E.on('init', function() {
   E.enableWatchdog(10, true);
@@ -726,3 +765,4 @@ E.on('init', function() {
   loadNetworkConfig();
   initialize();
 });
+
