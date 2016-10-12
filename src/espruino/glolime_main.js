@@ -676,39 +676,46 @@ function initialize() {
 function checkNetworkConfig(params){
   var i = 0, j = 0;
   var tmp;
-  for (i = 0; i < params.length; i++){
-    console.log('params[i] = ' + params[i]);
+  for (i = 0; i < params.length-1; i++){
     tmp = params[i].split('.');
-    console.log('tmp = ' + tmp);
     if (tmp.length == 4){
       for (j = 0; j < tmp.length; j++){
-        console.log('tmp[i] = ' + tmp[j]);
         if (isNaN(parseInt(tmp[j],10))) {
-          console.log('f:: tmp[i] = ' + tmp[j]);
           return false;
         }
       }
     } else {
-      console.log('f:: tmp.length = ' + tmp.length);
       return false;
     }
   }
   return true;
 }
 
+function byteArray2String(byteArray) {
+  var str = "";
+  for(var i=0; i<byteArray.length; i++) {
+    str += String.fromCharCode(byteArray[i]);
+  }
+  return str;
+}
+
+var NETWORK_PARAMS_COUNT = 6;
 function loadNetworkConfig(){
   var flash = require('Flash');
-  var settings;
+  //var settings;
   var addr_free_mem = flash.getFree();
-  addr = addr_free_mem[0].addr;
-  var data_1 = flash.read(48, addr);
-  settings = String.fromCharCode.apply(null, new Uint8Array(data_1));
+  var addr = addr_free_mem[0].addr;
+  var dataFromFlash = flash.read(128, addr);
+  var settings = byteArray2String(dataFromFlash);
   var param = settings.split('|');
   console.log(param); //TODO: check param!!!
-  if (checkNetworkConfig(param.slice(0,3))){
+  if (checkNetworkConfig(param.slice(0, NETWORK_PARAMS_COUNT))) {
     HOST = param[0];
     NETWORK_CONFIG.ip = param[1];
-    NETWORK_CONFIG.mask = param[2];
+    NETWORK_CONFIG.subnet = param[2];
+    NETWORK_CONFIG.gateway = param[3];
+    NETWORK_CONFIG.dns = param[4];
+    NETWORK_CONFIG.mac = param[5];
   } else {
     console.log('NetworkConf uncorrect');
   }
