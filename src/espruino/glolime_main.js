@@ -727,7 +727,10 @@ function processSerial6Data(){
   console.log(" ===> JSON from UART: ");
   console.log(result);
   if (result){
+    Serial6.write('Data OK!\n');
     writeInFlash();
+  } else {
+    Serial6.write('Bad data!\n');
   }
 }
 
