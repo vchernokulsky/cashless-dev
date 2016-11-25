@@ -1,0 +1,11 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP PLD-10
+D Connector 01x08
+$ENDCMP
+#
+$CMP PLD-8
+D Connector 01x08
+$ENDCMP
+#
+#End Doc Library

@@ -1,0 +1,329 @@
+EESchema Schematic File Version 2
+LIBS:power
+LIBS:device
+LIBS:transistors
+LIBS:conn
+LIBS:linear
+LIBS:regul
+LIBS:74xx
+LIBS:cmos4000
+LIBS:adc-dac
+LIBS:memory
+LIBS:xilinx
+LIBS:microcontrollers
+LIBS:dsp
+LIBS:microchip
+LIBS:analog_switches
+LIBS:motorola
+LIBS:texas
+LIBS:intel
+LIBS:audio
+LIBS:interface
+LIBS:digital-audio
+LIBS:philips
+LIBS:display
+LIBS:cypress
+LIBS:siliconi
+LIBS:opto
+LIBS:atmel
+LIBS:contrib
+LIBS:valves
+LIBS:Telemetry
+LIBS:Cables-cache
+EELAYER 25 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 1 1
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+Wire Wire Line
+	3400 1100 4800 1100
+Wire Wire Line
+	3400 1300 4800 1300
+Text Notes 3500 900  0    100  Italic 0
+Кабель сброса
+Text Notes 3500 1750 0    100  Italic 0
+Кабель RS-232
+Wire Wire Line
+	3400 2050 4800 2050
+Wire Wire Line
+	3400 2450 4800 2450
+Wire Wire Line
+	3400 5950 4800 5950
+Wire Wire Line
+	3400 6150 4800 6150
+Text Notes 3500 5750 0    100  Italic 0
+Кабель питания
+$Comp
+L CHU-2 XP1
+U 1 1 573F376B
+P 3050 1200
+F 0 "XP1" H 3250 1450 60  0000 C CNN
+F 1 "CHU-2" H 3200 950 60  0001 C CNN
+F 2 "" H 3050 1200 60  0000 C CNN
+F 3 "" H 3050 1200 60  0000 C CNN
+F 4 "Value" H 3050 1200 60  0001 C CNN "PN"
+	1    3050 1200
+	-1   0    0    -1  
+$EndComp
+$Comp
+L BLS-2 XP2
+U 1 1 573F37AA
+P 5150 1200
+F 0 "XP2" H 5350 1450 60  0000 C CNN
+F 1 "BLS-2" H 5300 950 60  0001 C CNN
+F 2 "" H 5150 1200 60  0000 C CNN
+F 3 "" H 5150 1200 60  0000 C CNN
+F 4 "Value" H 5150 1200 60  0001 C CNN "PN"
+	1    5150 1200
+	1    0    0    -1  
+$EndComp
+$Comp
+L CHU-3 XP1
+U 1 1 573F3893
+P 3050 2250
+F 0 "XP1" H 3200 2600 60  0000 C CNN
+F 1 "CHU-3" H 3250 1900 60  0001 C CNN
+F 2 "" H 3000 2150 60  0000 C CNN
+F 3 "" H 3000 2150 60  0000 C CNN
+F 4 "Value" H 3050 2250 60  0001 C CNN "PN"
+	1    3050 2250
+	-1   0    0    -1  
+$EndComp
+Text Notes 3500 3050 0    100  Italic 0
+Кабель USB
+Wire Wire Line
+	3400 3350 4800 3350
+Wire Wire Line
+	3400 3550 4800 3550
+Wire Wire Line
+	3400 3750 4800 3750
+$Comp
+L CHU-4 XP1
+U 1 1 573F3DA7
+P 2900 3650
+F 0 "XP1" H 2950 4100 60  0000 C CNN
+F 1 "CHU-4" H 2950 3200 60  0001 C CNN
+F 2 "" H 2700 3650 60  0000 C CNN
+F 3 "" H 2700 3650 60  0000 C CNN
+F 4 "Value" H 2900 3650 60  0001 C CNN "PN"
+	1    2900 3650
+	-1   0    0    -1  
+$EndComp
+Wire Wire Line
+	3400 3950 4800 3950
+$Comp
+L BLS-1 XP2
+U 1 1 573F47AC
+P 5300 3350
+F 0 "XP2" H 5800 3350 60  0000 C CNN
+F 1 "BLS-1" H 5300 3200 60  0001 C CNN
+F 2 "" H 5150 3250 60  0000 C CNN
+F 3 "" H 5150 3250 60  0000 C CNN
+	1    5300 3350
+	1    0    0    -1  
+$EndComp
+$Comp
+L BLS-1 XP3
+U 1 1 573F47F1
+P 5300 3550
+F 0 "XP3" H 5800 3550 60  0000 C CNN
+F 1 "BLS-1" H 5300 3400 60  0001 C CNN
+F 2 "" H 5150 3450 60  0000 C CNN
+F 3 "" H 5150 3450 60  0000 C CNN
+	1    5300 3550
+	1    0    0    -1  
+$EndComp
+$Comp
+L BLS-1 XP4
+U 1 1 573F4ECC
+P 5300 3750
+F 0 "XP4" H 5800 3750 60  0000 C CNN
+F 1 "BLS-1" H 5300 3600 60  0001 C CNN
+F 2 "" H 5150 3650 60  0000 C CNN
+F 3 "" H 5150 3650 60  0000 C CNN
+	1    5300 3750
+	1    0    0    -1  
+$EndComp
+$Comp
+L BLS-1 XP5
+U 1 1 573F4F0B
+P 5300 3950
+F 0 "XP5" H 5800 3950 60  0000 C CNN
+F 1 "BLS-1" H 5300 3800 60  0001 C CNN
+F 2 "" H 5150 3850 60  0000 C CNN
+F 3 "" H 5150 3850 60  0000 C CNN
+	1    5300 3950
+	1    0    0    -1  
+$EndComp
+Text Notes 2950 4400 0    100  Italic 0
+Кабель USB - исполнение 01
+$Comp
+L CHU-4 XP1
+U 1 1 573F574B
+P 2900 5000
+F 0 "XP1" H 2950 5450 60  0000 C CNN
+F 1 "CHU-4" H 2950 4550 60  0001 C CNN
+F 2 "" H 2700 5000 60  0000 C CNN
+F 3 "" H 2700 5000 60  0000 C CNN
+F 4 "Value" H 2900 5000 60  0001 C CNN "PN"
+	1    2900 5000
+	-1   0    0    -1  
+$EndComp
+$Comp
+L CHU-4 XP2
+U 1 1 573F57BE
+P 5300 5000
+F 0 "XP2" H 5350 5450 60  0000 C CNN
+F 1 "USB-A" H 5350 4550 60  0001 C CNN
+F 2 "" H 5100 5000 60  0000 C CNN
+F 3 "" H 5100 5000 60  0000 C CNN
+F 4 "Value" H 5300 5000 60  0001 C CNN "PN"
+	1    5300 5000
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	3400 4700 4800 4700
+Wire Wire Line
+	3400 4900 4800 4900
+Wire Wire Line
+	3400 5100 4800 5100
+Wire Wire Line
+	3400 5300 4800 5300
+Text Notes 2800 3400 0    60   Italic 0
+VBUS
+Text Notes 2800 3600 0    60   Italic 0
+D-
+Text Notes 2800 3800 0    60   Italic 0
+D+
+Text Notes 2800 4000 0    60   Italic 0
+GND
+Text Notes 2850 2100 0    60   Italic 0
+TXT
+Text Notes 2800 2500 0    60   Italic 0
+GND
+Text Notes 5150 3400 0    60   Italic 0
+VBUS
+Text Notes 5150 3600 0    60   Italic 0
+D-
+Text Notes 5150 3800 0    60   Italic 0
+D+
+Text Notes 5150 4000 0    60   Italic 0
+GND
+Text Notes 2800 4750 0    60   Italic 0
+VBUS
+Text Notes 2800 4950 0    60   Italic 0
+D-
+Text Notes 2800 5150 0    60   Italic 0
+D+
+Text Notes 2800 5350 0    60   Italic 0
+GND
+Text Notes 5150 4750 0    60   Italic 0
+VBUS
+Text Notes 5150 4950 0    60   Italic 0
+D-
+Text Notes 5150 5150 0    60   Italic 0
+D+
+Text Notes 5150 5350 0    60   Italic 0
+GND
+Text Notes 5150 2400 0    60   Italic 0
+GND
+Text Notes 5150 2200 0    60   Italic 0
+TXT
+Text Notes 2750 6000 0    60   Italic 0
++5VDC
+Text Notes 2800 6200 0    60   Italic 0
+GND
+$Comp
+L CHU-2 XP1
+U 1 1 573F878E
+P 3050 6050
+F 0 "XP1" H 3250 6300 60  0000 C CNN
+F 1 "CHU-2" H 3200 5800 60  0001 C CNN
+F 2 "" H 3050 6050 60  0000 C CNN
+F 3 "" H 3050 6050 60  0000 C CNN
+F 4 "Value" H 3050 6050 60  0001 C CNN "PN"
+	1    3050 6050
+	-1   0    0    -1  
+$EndComp
+Text Notes 4050 1100 0    60   Italic 0
+1
+Text Notes 4050 1300 0    60   Italic 0
+2
+Text Notes 4050 2050 0    60   Italic 0
+1
+Text Notes 4050 2450 0    60   Italic 0
+2
+Text Notes 4050 3350 0    60   Italic 0
+1
+Text Notes 4050 3550 0    60   Italic 0
+2
+Text Notes 4050 3750 0    60   Italic 0
+3
+Text Notes 4050 3950 0    60   Italic 0
+4
+Text Notes 4050 4700 0    60   Italic 0
+1
+Text Notes 4050 4900 0    60   Italic 0
+2
+Text Notes 4050 5100 0    60   Italic 0
+3
+Text Notes 4050 5300 0    60   Italic 0
+4
+Text Notes 4050 5950 0    60   Italic 0
+1
+Text Notes 4050 6150 0    60   Italic 0
+2
+Text Notes 2850 1150 0    60   Italic 0
+RS+
+Text Notes 2850 1350 0    60   Italic 0
+RS-
+Text Notes 5200 1150 0    60   Italic 0
+RS+
+Text Notes 5200 1350 0    60   Italic 0
+RS-
+Wire Wire Line
+	4800 2050 4800 2150
+Wire Wire Line
+	4800 2450 4800 2350
+$Comp
+L DB9F XP2
+U 1 1 574C468C
+P 5150 2250
+F 0 "XP2" H 5350 2500 60  0000 C CNN
+F 1 "DB9F" H 5300 2000 60  0001 C CNN
+F 2 "" H 5150 2250 60  0000 C CNN
+F 3 "" H 5150 2250 60  0000 C CNN
+F 4 "Value" H 5150 2250 60  0001 C CNN "PN"
+	1    5150 2250
+	1    0    0    -1  
+$EndComp
+$Comp
+L CHU-4 XP2
+U 1 1 574C52CD
+P 5300 6250
+F 0 "XP2" H 5350 6700 60  0000 C CNN
+F 1 "CHU-4" H 5350 5800 60  0001 C CNN
+F 2 "" H 5100 6250 60  0000 C CNN
+F 3 "" H 5100 6250 60  0000 C CNN
+F 4 "Value" H 5300 6250 60  0001 C CNN "PN"
+	1    5300 6250
+	1    0    0    -1  
+$EndComp
+Text Notes 5150 6400 0    60   Italic 0
+GND
+Text Notes 5150 6200 0    60   Italic 0
+GND
+Text Notes 5100 6000 0    60   Italic 0
++5VDC
+Text Notes 5050 6600 0    60   Italic 0
++12VDC
+$EndSCHEMATC
