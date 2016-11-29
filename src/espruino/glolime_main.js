@@ -22,15 +22,15 @@ var PIN_ETH_CS   = B12;
 var PIN_WIFI_RST = A4;
 
 // Indication funds by LEDs
-var PIN_NOT_ENOUGHT_MONEY   = P6;//ж
-var PIN_CARD_NOT_REGISTERED = P5;//к
-var PIN_DEV_READY           = P7;//з
+var PIN_NOT_ENOUGHT_MONEY   = P6; //Ж
+var PIN_CARD_NOT_REGISTERED = P7; //К
+var PIN_DEV_READY           = P5; //З
 var GPIO4                   = P4;
 var GPIO5                   = P3;
 
 // Network configuration
-var HOST = "192.168.2.101";
-var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.2.222", subnet: "255.255.255.0", gateway: "192.168.2.1", dns: "192.168.2.1"};
+var HOST = "192.168.0.5";
+var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.0.205", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "192.168.0.1"};
 //var NETWORK_CONFIG = {mac: "56:44:58:0:0:06"};
 var HOST_PING_TIMEOUT = 25000;
 
@@ -136,14 +136,14 @@ function switchLed(led, state) {
 }
 
 function blinkCarousel() {
-  PIN_CARD_NOT_REGISTERED.reset();
-  PIN_DEV_READY.set();
+  P7.reset();
+  P6.set();
   _carouselTimeout = setTimeout(function() {
-    PIN_DEV_READY.reset();
-    PIN_NOT_ENOUGHT_MONEY.set();
+    P6.reset();
+    P5.set();
     _carouselTimeout = setTimeout(function() {
-      PIN_NOT_ENOUGHT_MONEY.reset();
-      PIN_CARD_NOT_REGISTERED.set();
+      P5.reset();
+      P7.set();
       _carouselTimeout = setTimeout(blinkCarousel, 250);
     }, 250);
   }, 250);
@@ -675,6 +675,7 @@ function loadNetworkConfig(){
   addr = addr_free_mem[0].addr;
   var data_1 = flash.read(180, addr);
   data = ab2str(data_1);
+  console.log(data);
   settings = JSON.parse(data);
   if (settings){
     HOST = settings.host;
@@ -683,8 +684,10 @@ function loadNetworkConfig(){
     NETWORK_CONFIG.subnet = settings.config.subnet;
     NETWORK_CONFIG.gateway = settings.config.gateway;
     NETWORK_CONFIG.dns = settings.config.dns;
+    console.log("HOST = " + HOST + "  NETWORK_CONFIG = " + NETWORK_CONFIG);
   } else {
     console.log("Read config info from Flash ERROR");
+    console.log(data);
   }
 }
 
@@ -723,39 +726,36 @@ Serial6.on('data', function(data) {
 });
 
 function processSerial6Data(){
-  var result = JSON.parse(cmdSerial6);
-  console.log(" ===> JSON from UART: ");
-  console.log(result);
-  if (result){
-    Serial6.write('Data OK!\n');
+	var result = JSON.parse(cmdSerial6);
+    console.log(" ===> Result from UART: ");
+    console.log(result);
     writeInFlash();
-  } else {
-    Serial6.write('Bad data!\n');
-  }
 }
 
 function writeInFlash(){
   var toWriteInFlash = str2ab(cmdSerial6);
-  var l = toWriteInFlash.length + (4-toWriteInFlash.length%4);
-  var buf = new Uint8Array(l);
-  var i, j;
-  for (i = 0; i<l;i++){
-    if (i>toWriteInFlash.length)
-      buf[i] = 0;
-    else
-      buf[i] = toWriteInFlash[i];
-  }
-  var flash = require('Flash');
-  var addr_free_mem = flash.getFree();
-  var addr = addr_free_mem[0].addr;
-  console.log(" Writing " + l + " bytes ... ");
-  flash.erasePage(addr);
-  flash.write(buf, addr);
-  console.log(" Writing done! ");
-  bufferSerial6 = "";
-  reset();
-  load();
-  enableDevice();
+	var l = toWriteInFlash.length + (4-toWriteInFlash.length%4);
+	var buf = new Uint8Array(l);
+	var i, j;
+	for (i = 0; i<l;i++){
+      if (i>toWriteInFlash.length)
+		buf[i] = 0;
+      else
+		buf[i] = toWriteInFlash[i];
+	}
+	var flash = require('Flash');
+	var addr_free_mem = flash.getFree();
+	var addr = addr_free_mem[0].addr;
+	console.log(" Writing ... ");
+    Serial6.write("Writing...\n");
+	flash.erasePage(addr);
+	flash.write(buf, addr);
+	console.log("Writing done! ");
+    Serial6.write("Writing done!\n");
+    bufferSerial6 = "";
+	reset();
+    load();
+    enableDevice();
 }
 
 E.on('init', function() {
