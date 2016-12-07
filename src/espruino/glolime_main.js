@@ -484,6 +484,11 @@ function processGloLimeResponse(resp){
 function processLitleEnd(array) {
   var str = "";
   var tmp = array.reverse();
+  var mask = 0x80;
+  var check = tmp[0] & mask;
+  if (check !== 0x00){
+    return Number.NaN;
+  }
   for(var i=0; i<tmp.length; i++) {
     str += tmp[i].toString(16);
   }
