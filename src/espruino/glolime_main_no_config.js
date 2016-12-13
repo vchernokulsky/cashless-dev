@@ -400,7 +400,7 @@ function processGloLimeResponse(resp){
               var tempBalance = resp.slice(9,13);
               userType = resp.slice(8,9);
               console.log(' :: userType      -> ' + userType);
-              numBalance = processLitleEnd(tempBalance);
+              numBalance = processLitleEnd1(tempBalance);
               if(!isNaN(numBalance)) {
                 if (numBalance >= 2500) {
                   var balanceToSend = numBalance.toString(10)+"\n";
@@ -485,6 +485,20 @@ function processGloLimeResponse(resp){
 function processLitleEnd(array) {
   var str = "";
   var tmp = array.reverse();
+  for(var i=0; i<tmp.length; i++) {
+    str += tmp[i].toString(16);
+  }
+  return parseInt(str, 16);
+}
+
+function processLitleEnd1(array) {
+  var str = "";
+  var tmp = array.reverse();
+  var mask = 0x80;
+  var check = tmp[0] & mask;
+  if (check !== 0x00){
+    return 0;
+  }
   for(var i=0; i<tmp.length; i++) {
     str += tmp[i].toString(16);
   }
