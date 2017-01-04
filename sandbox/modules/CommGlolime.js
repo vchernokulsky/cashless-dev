@@ -30,12 +30,44 @@ CommGlolime.prototype.setup = function(eth, client, crc, p) {
   //this._HOST = host;
 };
 
+CommGlolime.prototype.getBalance = function(uid, callback) {
+    this._sendMsgToGloLime();
+};
+
+CommGlolime.prototype.sellProduct = function(productId, price, callback) {
+  this._sendMsgToGloLime();
+};
+
 CommGlolime.prototype._getHexStr = function(data) {
   var str = '';
   for(var i=0; i<data.length; i++) {
     str += ('0x' + data[i].toString(16) + ' ');
   }
   return str;
+};
+
+// return HEX value
+CommGlolime.prototype._processLitleEnd = function (array) {
+  var str = "";
+  var tmp = array.reverse();
+  for(var i=0; i<tmp.length; i++) {
+    str += tmp[i].toString(16);
+  }
+  return parseInt(str, 16);
+};
+
+CommGlolime.prototype._processLitleEnd1 = function (array) {
+  var str = "";
+  var tmp = array.reverse();
+  var mask = 0x80;
+  var check = tmp[0] & mask;
+  if (check !== 0x00){
+    return 0;
+  }
+  for(var i=0; i<tmp.length; i++) {
+    str += tmp[i].toString(16);
+  }
+  return parseInt(str, 16);
 };
 
 CommGlolime.prototype._waitForServerWakeup = function () {
@@ -100,10 +132,7 @@ CommGlolime.prototype._processByte = function (cmdByte){
 	}
 };
 
-
 CommGlolime.prototype._sendMsgToGloLime = function (msg){
-    //var msg = [], msg_str = "";
-    //msg = makeGloLimeRespArray(address, _frameId, comandCode, cmdData);
     for (var i = 0; i < msg.length; i++) {
         msg_str += msg[i];
     }
@@ -125,6 +154,7 @@ CommGlolime.prototype._sendMsgToGloLime = function (msg){
         refSocket.end();
       }
     }, 5000);
+
     this._client.connect({host: this._HOST, port: 6767},  function(socket) {
         console.log('Client connected');
         console.log('REQUEST :: ' + this._getHexStr(msg));
@@ -143,7 +173,7 @@ CommGlolime.prototype._sendMsgToGloLime = function (msg){
             }
 			var isComplete = false;
 			for(var i = 0; i < data.length; i++) {
-              putByte(data.charCodeAt(i), null);
+              this._putByte(data.charCodeAt(i), null);
 			}
 		});
 		socket.on('close',function(){
@@ -258,28 +288,4 @@ CommGlolime.prototype._processGloLimeResponse = function (resp){
           }
         }
 	}
-};
-
-// return HEX value
-CommGlolime.prototype._processLitleEnd = function (array) {
-  var str = "";
-  var tmp = array.reverse();
-  for(var i=0; i<tmp.length; i++) {
-    str += tmp[i].toString(16);
-  }
-  return parseInt(str, 16);
-};
-
-CommGlolime.prototype._processLitleEnd1 = function (array) {
-  var str = "";
-  var tmp = array.reverse();
-  var mask = 0x80;
-  var check = tmp[0] & mask;
-  if (check !== 0x00){
-    return 0;
-  }
-  for(var i=0; i<tmp.length; i++) {
-    str += tmp[i].toString(16);
-  }
-  return parseInt(str, 16);
 };
