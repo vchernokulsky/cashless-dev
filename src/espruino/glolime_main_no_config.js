@@ -4,7 +4,6 @@ var balance = "";
 var isEnabled = false;
 var isVendDone = true;
 
-var _sessionId = 0;
 var _failuresCount = 0;
 
 var _serialInterval = 'undefined';
@@ -31,7 +30,6 @@ var GPIO5                   = P3;
 // Network configuration
 var HOST = "192.168.1.101";
 var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.1.201", subnet: "255.255.255.0", gateway: "192.168.1.1", dns: "192.168.1.1"};
-//var NETWORK_CONFIG = {mac: "56:44:58:0:0:06"};
 var HOST_PING_TIMEOUT = 25000;
 
 var PREAMBLE  = 0xFD;
@@ -326,11 +324,11 @@ function startRFIDListening() {
             logger('isEnabled: ' + isEnabled + '   isVendDone: ' + isVendDone);
             if (isEnabled && isVendDone){
               buffer = [];
-              uidToSend = processUidToSend(data.uid);
               isVendDone = false;       //vend session started
+              uidToSend = processUidToSend(data.uid);
               _vendBlinkerInterval = startBlinker(PIN_DEV_READY, 500);
-		var msg = [], msg_str = "";
-    		msg = makeGloLimeRespArray(0x01, frameId, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
+              var msg = [], msg_str = "";
+    		  msg = makeGloLimeRespArray(0x01, frameId, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
               sendMsgToGloLime(msg); // TODO: ExtSrv
               frameId++;
               userIdLittleEndian = [];
