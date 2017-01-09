@@ -28,8 +28,8 @@ var GPIO4                   = P4;
 var GPIO5                   = P3;
 
 // Network configuration
-var HOST = "192.168.1.101";
-var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.1.201", subnet: "255.255.255.0", gateway: "192.168.1.1", dns: "192.168.1.1"};
+var HOST = "192.168.0.100";
+var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.0.201", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "192.168.0.1"};
 var HOST_PING_TIMEOUT = 25000;
 
 function logger(msg) {
@@ -195,11 +195,13 @@ function processBalance(error, data){
           case 241:
               PIN_ETH_RST.reset();
               logger("reset ETH_RST pin");
+              /* 
               setTimeout(function() {
                 logger("set ETH_RST pin");
                 PIN_ETH_RST.set();
                 glolime.getBalance(cardType, cardUID, processBalance);
               }, 3000);
+              */
               break;
           case ERROR_INVALID_CRC:
               console.log('ERROR: CRC incorrect');
@@ -385,7 +387,7 @@ function initialize() {
       configurator = require("configurator").create();
       configurator.setup(flash);
     }
-    var result = configurator.loadNetworkConfig();
+    var result = -1;//configurator.loadNetworkConfig();
     switch (result) {
       case 0:
         logger("Network Config Loaded from Flash");

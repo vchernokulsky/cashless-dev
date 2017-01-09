@@ -160,8 +160,8 @@ CommGlolime.prototype._processByte = function (cmdByte){
 		case this._ESCSUM_STATE:
 			this._buffer = this._buffer.concat(this._EscSum[cmdByte]);
 			console.log(' => this._buffer.length = ' + this._buffer.length);
-			this._parser_state = BEGIN_STATE;
-			bthis._reak;
+			this._parser_state = this._BEGIN_STATE;
+			break;
 		case this._END_STATE:
 			//
 			break;
