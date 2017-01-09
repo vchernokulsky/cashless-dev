@@ -32,16 +32,9 @@ var HOST = "192.168.1.101";
 var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.1.201", subnet: "255.255.255.0", gateway: "192.168.1.1", dns: "192.168.1.1"};
 var HOST_PING_TIMEOUT = 25000;
 
-var PREAMBLE  = 0xFD;
-var ESC       = 0xFF;
-var POSTAMBLE = 0xFE;
-
 function logger(msg) {
     console.log(msg);
 }
-
-var buffer = new Array(0);
-var EscSum = new Uint8Array([0xFF, 0xFE, 0xFD]);
 
 var ERROR_OK                = 0x00,
     ERROR_INVALID_CRC       = 0xFF,
@@ -55,25 +48,17 @@ var ERROR_OK                = 0x00,
 	ERROR_NOT_REGISTERED_CARD  = 0xFC;
 
 
-// Frame ID
-var frameId = 0x00;
-
 // for CRC16_X25 calculation
-var crc;
-// HEX user's UID for Request to GloLime
-var uidToSend;
+var crc = 'undefined';
 
-var gloLimeResponse = [];
+// params to getBalance()
+var cardType = 0x01,
+    cardUID = [],
+    str_user_id = '0'; // returns GetBalance()
 
 // For communications
-var client, wifi;
-
-var userId;
-var userIdLittleEndian;
-var userType;
-
-// ID product to buy (get from MDB device)
-var productId;
+var client,
+    wifi;
 
 // For setting communication
 var isRFIDOk  = false;
@@ -82,6 +67,11 @@ var isWiFiOk  = false;
 // For setInterval to check WiFi and RFID/NFC
 var idWiFi, idRFID;
 
+// NetWork Configurator
+var configurator = 'undefined';
+
+// Glolime commubications
+var golime = 'undefined';
 
 function disableDevice() {
   isEnabled = false;
@@ -152,15 +142,106 @@ function stopBlinker(intervalId) {
 	}
 }
 
-function uintToByteArray(/*long*/long) {
-    // we want to represent the input as a 8-bytes array
-    var byteArray = [0, 0, 0, 0];
-    for ( var index = 0; index < byteArray.length; index ++ ) {
-        var byte = long & 0xff;
-        byteArray [ index ] = byte;
-        long = (long - byte) / 256 ;
+function processSell(error, data){
+  logger(":: Process SELL PRODUCT");
+  logger("ERROR CODE: " + error);
+}
+
+function processBalance(error, data){
+  logger(":: Process GET BALANCE");
+  logger("ERROR CODE: " + error);
+  if(error === 0) {
+    logger("USER ID: " + data.userId);
+    str_user_id = data.userId;
+    logger("USER TYPE: " + data.userType);
+    logger("BALANCE: " + data.balance);
+    if(!isNaN(data.balance)) {
+        if (data.balance >= 2500) {
+            var balanceToSend = (data.balance).toString(10)+"\n";
+            logger("BALANCE TO STM: " + balanceToSend);
+            //TODO: change to balance ACK
+            Serial4.write(balanceToSend);
+            _internalCommTimeout = setTimeout(function(){
+                logger('ERROR: Balance ACK timeout');
+                if (_vendBlinkerInterval != 'undefined'){
+                   stopBlinker(_vendBlinkerInterval);
+                   _vendBlinkerInterval = 'undefined';
+                }
+                enableDevice();
+            }, 2000);
+        } else {
+            logger("ATTENTION:: Not enought money");
+            if (_vendBlinkerInterval != 'undefined'){
+                stopBlinker(_vendBlinkerInterval);
+                _vendBlinkerInterval = 'undefined';
+            }
+            singleBlink(PIN_NOT_ENOUGHT_MONEY, 5000);
+        }
+    } else {
+        logger("Recieved incorrect data: " + numBalance);
+        if (_vendBlinkerInterval != 'undefined'){
+            stopBlinker(_vendBlinkerInterval);
+            _vendBlinkerInterval = 'undefined';
+        }
+        enableDevice();
     }
-    return byteArray;
+  } else {
+      if (_vendBlinkerInterval != 'undefined'){
+          stopBlinker(_vendBlinkerInterval);
+          _vendBlinkerInterval = 'undefined';
+      }
+      enableDevice();
+      switch (error){
+          case 241:
+              PIN_ETH_RST.reset();
+              logger("reset ETH_RST pin");
+              setTimeout(function() {
+                logger("set ETH_RST pin");
+                PIN_ETH_RST.set();
+                glolime.getBalance(cardType, cardUID, processBalance);
+              }, 3000);
+              break;
+          case ERROR_INVALID_CRC:
+              console.log('ERROR: CRC incorrect');
+              isVendDone = true;
+              break;
+          case ERROR_INVALID_COMMAND:
+              console.log('ERROR: Cmd incorrect');
+              break;
+          case ERROR_INVALID_PARAMETER:
+              console.log('ERROR: Cmd parament incorrect');
+              break;
+          case ERROR_INVALID_CRC:
+              console.log('ERROR: CRC INCORRECT');
+              break;
+          case ERROR_INVALID_COMMAND:
+              console.log('ERROR: CMD INCORRECT');
+              break;
+          case ERROR_INVALID_PARAMETER:
+              console.log('ERROR: CMD PARAMENT INCORRECT');
+              break;
+          case ERROR_INSUFFICIENT_FUNDS:
+              console.log('ERROR: INSUFFICIENT FUNDS ');
+              singleBlink(PIN_NOT_ENOUGHT_MONEY,5000);
+              break;
+          case ERROR_NON_EXISTENT_PRODUCT:
+              console.log('ERROR: PRODUCT DOES NOT EXIST');
+              break;
+          case ERROR_NON_EXISTENT_USER:
+              console.log('ERROR: USER DOES NOT EXIST');
+              break;
+          case ERROR_NON_EXISTENT_SALE:
+              console.log('ERROR: SALE DOES NOT EXIST');
+              break;
+          case ERROR_NOT_REGISTERED_CARD:
+              console.log('ERROR: CARD DOES NOT REGISTERED');
+              singleBlink(PIN_CARD_NOT_REGISTERED, 5000);
+              break;
+          default:
+              console.log('Unknown comand exit code');
+              break;
+      }
+  }
 }
 
 function processTransportLayerCmd(cmd) {
@@ -183,19 +264,25 @@ function processTransportLayerCmd(cmd) {
         logger('DISABLE received');
         break;
       case 'VEND':          //VEND:<PRODUCT ID>:<PRODUCT PRICE>\n
-        str_product_id = array[1];
-        str_product_price = array[2];
+        var str_product_id = array[1];
+        var str_product_price = array[2];
 		logger('VEND INFO | PRODUCT ID: ' + str_product_id + '   PRODUCT PRICE: ' + parseInt(str_product_price, 10)/100);
-		product_id = uintToByteArray(parseInt(str_product_id, 10)+1);
+		/*
+        product_id = uintToByteArray(parseInt(str_product_id, 10)+1);
 		product_price = uintToByteArray(parseInt(str_product_price, 10));
 		//======================ExtSrv
 		var msg = [], msg_str = "";
-    		msg = makeGloLimeRespArray(0x01, frameId, 0x02, makeCmdDataToBuy(userIdLittleEndian, product_id, product_price));
+    	msg = makeGloLimeRespArray(0x01, frameId, 0x02, makeCmdDataToBuy(userIdLittleEndian, product_id, product_price));
 		sendMsgToGloLime(msg);
         frameId++; //<--??
+        */
+        glolime.sellProduct(str_product_id, str_product_price, str_user_id, processSell);
         break;
       case 'CANCEL':          //CANCEL:\n
-		stopBlinker(_vendBlinkerInterval);
+        if (_vendBlinkerInterval != 'undefined'){
+            stopBlinker(_vendBlinkerInterval);
+            _vendBlinkerInterval = 'undefined';
+        }
 		enableDevice();
         logger('CANCEL recieved');
         break;
@@ -213,108 +300,9 @@ function processTransportLayerCmd(cmd) {
         }
     }
 }
-
-
-function makeGloLimeRespArray (_addr, _frameId, _cmdCode, cmdData){
-	var size = 3 + cmdData.length;
-    var array = [];
-    var array_bf = [];
-    var result = [];
-
-	array[0] = _addr;
-	array[1] = _frameId;
-	array[2] = _cmdCode;
-
-	var i = 0, j = 3;
-    for (i = 0, j = 3; i < cmdData.length; i++, j++) {
-		array[j] = cmdData[i];
-	}
-
-	var checksum = crc.calculate(array);
-    array_bf = bytestuffToResp(array);
-    var tmp1 = (checksum >> 8);
-    var tmp2 = (checksum & 0x00FF);
-    array_bf[array_bf.length] = tmp2;
-	array_bf[array_bf.length] = tmp1;
-
-    result = addPrePostAmble(array_bf);
-    return result;
-}
-
-function addPrePostAmble(array){
-    var result = [];
-    result[0] = PREAMBLE;
-    for (var i = 1, j = 0; j < array.length; i++, j++)
-    {
-        result[i] = array[j];
-    }
-    result[result.length] = POSTAMBLE;
-    return result;
-}
-
-function bytestuffToResp(array){
-  var result = [];
-  for (var i = 0; i < array.length; i++){
-    switch(array[i]){
-      case 255: // 0xFF -> 0xFF 0x00
-        result = result.concat(255, 0);
-        break;
-      case 254: // 0xFE -> 0xFF 0x01
-        result = result.concat(255, 1);
-        break;
-      case 253: // 0xFD -> 0xFF 0x02
-        result = result.concat(255, 2);
-        break;
-      default:
-        result = result.concat(array[i]);
-        break;
-    }
-  }
-  return result;
-}
-
-function makeCmdDataToGetBalance(cardType, cardUid){
-    var data = [];
-    data[0] = cardType;
-    for (var i = 1, j = 0; i < (cardUid.length+1); i++, j++) {
-        data[i] = cardUid[j];
-    }
-    return data;
-}
-//params -> array in little endian
-function makeCmdDataToBuy(_userId, _productId, _productPrice){
-    var proIdToSend = [];
-    proIdToSend[0] = _productId[0];
-    proIdToSend[1] = _productId[1];
-    proIdToSend[2] = 0x00;
-    proIdToSend[3] = 0x00;
-    var prodPriceToSend = [];
-    prodPriceToSend[0] = _productPrice[0];
-    prodPriceToSend[1] = _productPrice[1];
-    prodPriceToSend[2] = 0x00;
-    prodPriceToSend[3] = 0x00;
-    return (_userId.concat(proIdToSend).concat(prodPriceToSend));
-}
-
-function processUidToSend(uid){
-    var str = "", result = [], temp = "";
-    for (var i = 0; i < uid.length; i++) {
-        temp = uid[i].toString(16);
-        if (temp.length < 2) {
-            temp = "0" + temp;
-        }
-        str += temp;
-    }
-    for (var j = 0; j < str.length; j++) {
-        result[j] = str.charCodeAt(j);
-    }
-    result[result.length] = 0;
-    return result;
-}
-
 function startRFIDListening() {
 	nfc.on('tag', function(error, data) {
-        logger("Frame ID:" + frameId + "  Failures count:" + _failuresCount);
+        logger("Failures count:" + _failuresCount);
 		if (error) {
 			print('tag read error');
             //TODO: nfc reader reinitialization
@@ -323,15 +311,20 @@ function startRFIDListening() {
 		} else {
             logger('isEnabled: ' + isEnabled + '   isVendDone: ' + isVendDone);
             if (isEnabled && isVendDone){
-              buffer = [];
               isVendDone = false;       //vend session started
-              uidToSend = processUidToSend(data.uid);
               _vendBlinkerInterval = startBlinker(PIN_DEV_READY, 500);
+              /*
+              uidToSend = processUidToSend(data.uid);
               var msg = [], msg_str = "";
     		  msg = makeGloLimeRespArray(0x01, frameId, 0x01, makeCmdDataToGetBalance(0x01, uidToSend));
               sendMsgToGloLime(msg); // TODO: ExtSrv
               frameId++;
               userIdLittleEndian = [];
+              */
+              cardUID = data.uid;
+              cardType = 0x01;
+              logger("CARD UID: " + cardUID);
+              glolime.getBalance(cardType, cardUID, processBalance);
             }
 		}
 		setTimeout(function () {
@@ -359,12 +352,12 @@ function startSerialListening() {
 }
 
 function initNfcModule(nfc) {
-    console.log("! Starting NFC module");
+    logger("! Starting NFC module");
     // waiting for RFID wake up
     idRFID = setInterval(function () {
       if (!isRFIDOk){
         // wake up rfid
-        console.log("-> isRFIDOk = " + isRFIDOk);
+        logger("-> isRFIDOk = " + isRFIDOk);
         nfc.wakeUp(function(error){
           if (error) {
             print('RFID wake up error', error);
@@ -373,7 +366,7 @@ function initNfcModule(nfc) {
           } else {
               print('RFID wake up OK');
               isRFIDOk = true;
-              console.log('Clear interval RFID...');
+              logger('Clear interval RFID...');
               clearInterval(idRFID);
               // start peripherial
               nfc.listen();
@@ -386,7 +379,26 @@ function initNfcModule(nfc) {
 }
 
 function initialize() {
-    console.log("... peripherial initialising ... ");
+    logger("... network configuration ... ");
+    var flash = require('Flash');
+    if (configurator == 'undefined') {
+      configurator = require("configurator").create();
+      configurator.setup(flash);
+    }
+    var result = configurator.loadNetworkConfig();
+    switch (result) {
+      case 0:
+        logger("Network Config Loaded from Flash");
+        logger("CODE:" + result);
+        logger("HOST: " + configurator.getHost());
+        logger("NETWORK CONFIG:");
+        logger(configurator.getNetworkConfig());
+        break;
+      default:
+        logger("ERROR:: Network Config Load: " + result);
+        break;
+    }
+    logger("... peripherial initialising ... ");
     PIN_MDB_RST.reset();
 	PIN_DEV_READY.reset();
     logger("MDB RESET");
@@ -405,9 +417,10 @@ function initialize() {
 	logger(eth.getIP());
 	crc = require("CRC16").create();
     client = require("net");
-	 var p = require('Ping');
-	// ExtSrv MODULE
-	// CommGlolime.setup(eth,client,crc,p)
+    var p = require('Ping');
+    logger("... glolime communication ... ");
+    glolime = require("CommGlolime").create();
+    glolime.setup(client, HOST, crc, p);
     initNfcModule(nfc);
     setTimeout(function(){
       PIN_MDB_RST.set();
@@ -416,46 +429,6 @@ function initialize() {
 }
 
 
-function loadNetworkConfig(){
-  var flash = require('Flash');
-  var data, settings;
-  var addr_free_mem = flash.getFree();
-  addr = addr_free_mem[0].addr;
-  var data_1 = flash.read(160, addr);
-  data = ab2str(data_1);
-  settings = JSON.parse(data);
-  if (settings){
-    HOST = settings.host;
-    NETWORK_CONFIG.ip = settings.netconfig.ip;
-    NETWORK_CONFIG.mac = settings.netconfig.mac;
-    NETWORK_CONFIG.subnet = settings.netconfig.subnet;
-    NETWORK_CONFIG.gateway = settings.netconfig.gateway;
-    NETWORK_CONFIG.dns = settings.netconfig.dns;
-    console.log("HOST = " + HOST + "  NETWORK_CONFIG = " + NETWORK_CONFIG);
-  } else {
-    console.log("Read config info from Flash ERROR");
-  }
-}
-
-function ab2str(buf) {
-  var str = "";
-  for (var i = 0; i < buf.length; i++){
-    str+=String.fromCharCode(buf[i]);
-  }
-  return str;
-}
-
-function str2ab(str) {
-  var buf = new ArrayBuffer(str.length); // 2 bytes for each char
-  var bufView = new Uint8Array(buf);
-  var strLen=str.length;
-  for (var i=0; i<strLen; i++) {
-    bufView[i] = str.charCodeAt(i);
-  }
-  return buf;
-}
-
-var toWriteInFlash = new Uint8Array(0);
 var cmdSerial6 = "";
 var bufferSerial6 = "";
 Serial6.setup(115200);
@@ -467,50 +440,34 @@ Serial6.on('data', function(data) {
     cmdSerial6 = bufferSerial6.slice(0, idx);
     bufferSerial6 = bufferSerial6.slice(idx, bufferSerial6.length-1);
     cmdSerial6 = cmdSerial6.trim();
-    processSerial6Data();
+
+    if (configurator == 'undefined'){
+      configurator = require("configurator").create();
+      configurator.setup(flash);
+    }
+    var result = configurator.saveNetworkConfig(cmdSerial6);
+    switch (result){
+      case 0:
+        logger("Network Config Saved in Flash");
+        reset();
+        load();
+        enableDevice();
+        break;
+      default:
+        logger("ERROR:: Network Config Safe: " + result);
+        break;
+    }
   }
 });
 
-function processSerial6Data(){
-	var result = JSON.parse(cmdSerial6);
-    console.log(" ===> Result from UART: ");
-    console.log(result);
-    writeInFlash();
-}
 
-function writeInFlash(){
-  var toWriteInFlash = str2ab(cmdSerial6);
-	var l = toWriteInFlash.length + (4-toWriteInFlash.length%4);
-	var buf = new Uint8Array(l);
-	var i, j;
-	for (i = 0; i<l;i++){
-      if (i>toWriteInFlash.length)
-		buf[i] = 0;
-      else
-		buf[i] = toWriteInFlash[i];
-	}
-	var flash = require('Flash');
-	var addr_free_mem = flash.getFree();
-	var addr = addr_free_mem[0].addr;
-	console.log(" Writing ... ");
-	flash.erasePage(addr);
-	flash.write(buf, addr);
-	console.log(" Writing done! ");
-    bufferSerial6 = "";
-	reset();
-    load();
-    enableDevice();
-}
-
-E.on('init', function() {
+//E.on('init', function() {
   E.enableWatchdog(10, true);
   process.on('uncaughtException', function() {
-    console.log('Uncaught Exception!!!');
+    logger('Uncaught Exception!!!');
     reset();
     load();
   });
   blinkCarousel();
-  //loadNetworkConfig();
   initialize();
-});
-
+//});

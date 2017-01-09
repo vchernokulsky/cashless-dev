@@ -16,7 +16,7 @@ var CommGlolime = function CommGlolime() {
   this._BALANCE_CMD = 0x01;
   this._SELL_CMD = 0x02;
   this._buffer = new Array(0);
-  
+  this._EscSum = new Uint8Array([0xFF, 0xFE, 0xFD]);
   this._ERROR_OK = 0x00;
   this._ERROR_TIMEOUT = 0xF1;
   ///
@@ -158,7 +158,7 @@ CommGlolime.prototype._processByte = function (cmdByte){
 			this._buffer = this._buffer.concat(cmdByte);
 			break;
 		case this._ESCSUM_STATE:
-			this._buffer = this._buffer.concat(EscSum[cmdByte]);
+			this._buffer = this._buffer.concat(this._EscSum[cmdByte]);
 			console.log(' => this._buffer.length = ' + this._buffer.length);
 			this._parser_state = BEGIN_STATE;
 			bthis._reak;
