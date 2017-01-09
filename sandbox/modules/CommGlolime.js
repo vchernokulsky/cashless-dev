@@ -52,13 +52,13 @@ CommGlolime.prototype.getBalance = function(cardType, strCardUid, callback) {
   cmdData = [cardType].concat(cardUid);
   var msg = [];
   msg = this._makeCmdFrame(this._ADDR, this._BALANCE_CMD, cmdData);
-  this._frameID++;
   this._sendMsgFrame(msg, callback);
 };
 
-CommGlolime.prototype.sellProduct = function(strId, strPrice, userId/*должен быть в little endian*/, callback) {
+CommGlolime.prototype.sellProduct = function(strId, strPrice, strUserId, callback) {
   var productId = this._uintToByteArray(parseInt(strId, 10)+1);
   var productPrice = this._uintToByteArray(parseInt(strPrice, 10));
+  var userId = this._uintToByteArray(parseInt(strUserId, 10));
   var cmdData = [];
   var prodIdToSend = [];
   prodIdToSend[0] = productId[0];
@@ -70,10 +70,14 @@ CommGlolime.prototype.sellProduct = function(strId, strPrice, userId/*долже
   prodPriceToSend[1] = productPrice[1];
   prodPriceToSend[2] = 0x00;
   prodPriceToSend[3] = 0x00;
-  cmdData = (userId.concat(prodIdToSend).concat(prodPriceToSend));
+  var userIdToSend = [];
+  userIdToSend[0] = userId[0];
+  userIdToSend[1] = userId[1];
+  userIdToSend[2] = userId[2];
+  userIdToSend[3] = userId[3];
+  cmdData = (userIdToSend.concat(prodIdToSend).concat(prodPriceToSend));
   var msg = [];
   msg = this._makeCmdFrame(this._ADDR, this._SELL_CMD, cmdData);
-  this._frameID++;
   this._sendMsgFrame(msg, callback);
 };
 
@@ -238,6 +242,7 @@ CommGlolime.prototype._sendMsgFrame = function (msg, callback){
 		}
         refSocket = socket;
 		socket.write(s);
+        owner._frameID++;
 		socket.on('data', function(data) {
             try {
               clearTimeout(timeoutId);
@@ -272,18 +277,22 @@ CommGlolime.prototype._processResponseFrame = function (resp, callback){
               var userType = resp.slice(8,9);
               var balance = this._processLitleEnd1(resp.slice(9,13));
               var data = {"userId":userId, "userType":userType, "balance":balance};
+              this._buffer = [];
               callback(exitCode, data);
               break;
             case 2:
-              callback(exitCode);
+              this._buffer = [];
+              callback(exitCode, {});
               break;
             default:
-              callback(exitCode);
+              this._buffer = [];
+              callback(exitCode, {});
               break;
           }
         }
         else {
-          callback(exitCode);
+          this._buffer = [];
+          callback(exitCode, {});
           /*
           switch (exitCode){
               case ERROR_INVALID_CRC:

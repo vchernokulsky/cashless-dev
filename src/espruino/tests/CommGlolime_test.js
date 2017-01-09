@@ -41,4 +41,13 @@ function processBalance(error, data){
   }
 }
 
+function processSell(error, data){
+   console.log("ERROR CODE: " + error);
+}
+
+
 glolime.getBalance(cardType, arrayUid, processBalance);
+setTimeout(function(){
+  console.log(':: SELL PRODUCT\n');
+  glolime.sellProduct('11', '2000', '35', processSell);
+},2000);
