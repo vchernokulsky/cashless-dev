@@ -655,42 +655,18 @@ function initNfcModule(nfc) {
     }, 5000);
 }
 
-function initialize() {
-    console.log("... peripherial initialising ... ");
-    PIN_MDB_RST.reset();
-	PIN_DEV_READY.reset();
-    logger("MDB RESET");
-    // setup serial for MDB transport communication
-    Serial4.setup(115200);
-    // setup RFID module
-	I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
-    nfc = require("nfc").connect({i2c: I2C1, irqPin: PIN_RFID_IRQ});
-    // setup ethernet module
-    logger("Setup ethernet module");
-    PIN_ETH_RST.set();
-    PIN_ETH_IRQ.set();
-    SPI2.setup({mosi:B15, miso:B14, sck:B13});
-    eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
-    eth.setIP(NETWORK_CONFIG);
-	logger(eth.getIP());
-	crc = require("CRC16").create();
-    client = require("net");
-    initNfcModule(nfc);
-    setTimeout(function(){
-      PIN_MDB_RST.set();
-      logger('MDB SET');
-	}, 12000);
-}
-
-
 function loadNetworkConfig(){
   var flash = require('Flash');
   var data, settings;
   var addr_free_mem = flash.getFree();
   addr = addr_free_mem[0].addr;
-  var data_1 = flash.read(160, addr);
+  var data_1 = flash.read(192, addr);
   data = ab2str(data_1);
   settings = JSON.parse(data);
+  logger("Config from flash:\n");
+  logger(data);
+  logger("::\n");
+  logger(settings);
   if (settings){
     HOST = settings.host;
     NETWORK_CONFIG.ip = settings.netconfig.ip;
@@ -725,7 +701,7 @@ function str2ab(str) {
 var toWriteInFlash = new Uint8Array(0);
 var cmdSerial6 = "";
 var bufferSerial6 = "";
-Serial6.setup(115200);
+
 Serial6.on('data', function(data) {
   failureDevice();
   bufferSerial6 += data;
@@ -734,6 +710,8 @@ Serial6.on('data', function(data) {
     cmdSerial6 = bufferSerial6.slice(0, idx);
     bufferSerial6 = bufferSerial6.slice(idx, bufferSerial6.length-1);
     cmdSerial6 = cmdSerial6.trim();
+    logger("Serial6 data: \n");
+    logger(bufferSerial6);
     processSerial6Data();
   }
 });
@@ -742,7 +720,9 @@ function processSerial6Data(){
 	var result = JSON.parse(cmdSerial6);
     console.log(" ===> Result from UART: ");
     console.log(result);
-    writeInFlash();
+    if (result != 'undefined'){
+      writeInFlash();
+    }
 }
 
 function writeInFlash(){
@@ -764,10 +744,49 @@ function writeInFlash(){
 	flash.write(buf, addr);
 	console.log(" Writing done! ");
     bufferSerial6 = "";
-	reset();
-    load();
-    enableDevice();
+    cmdSerial6 = "";
+    Serial6.write("\nWriting done!");
+    setTimeout(function(){
+      reset();
+      load();
+      enableDevice();
+    }, 2000);
 }
+
+function initialize() {
+    console.log("... peripherial initialising ... ");
+    PIN_MDB_RST.reset();
+	PIN_DEV_READY.reset();
+    logger("MDB RESET");
+    // setup serial for MDB transport communication
+    Serial4.setup(115200);
+    // setup RFID module
+	I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
+    nfc = require("nfc").connect({i2c: I2C1, irqPin: PIN_RFID_IRQ});
+    // setup ethernet module
+    logger("Setup ethernet module");
+    PIN_ETH_RST.set();
+    PIN_ETH_IRQ.set();
+    SPI2.setup({mosi:B15, miso:B14, sck:B13});
+    eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
+    eth.setIP(NETWORK_CONFIG);
+	logger(eth.getIP());
+
+    var sNetConf = "";
+    var cfg = eth.getIP();
+    sNetConf = "\nMAC: " + cfg.mac + "\nIP: " + cfg.ip + "\nMASK: " + cfg.subnet + "\nTOUCHBOX: " + HOST;
+    Serial6.setup(9600);
+    Serial6.write(sNetConf);
+
+	crc = require("CRC16").create();
+    client = require("net");
+    initNfcModule(nfc);
+    setTimeout(function(){
+      PIN_MDB_RST.set();
+      logger('MDB SET');
+	}, 12000);
+}
+
 
 E.on('init', function() {
   E.enableWatchdog(10, true);
@@ -777,7 +796,7 @@ E.on('init', function() {
     load();
   });
   blinkCarousel();
-  //loadNetworkConfig();
+  loadNetworkConfig();
   initialize();
 });
 
