@@ -213,15 +213,6 @@ function processBalance(error, data){
           case ERROR_INVALID_PARAMETER:
               console.log('ERROR: Cmd parament incorrect');
               break;
-          case ERROR_INVALID_CRC:
-              console.log('ERROR: CRC INCORRECT');
-              break;
-          case ERROR_INVALID_COMMAND:
-              console.log('ERROR: CMD INCORRECT');
-              break;
-          case ERROR_INVALID_PARAMETER:
-              console.log('ERROR: CMD PARAMENT INCORRECT');
-              break;
           case ERROR_INSUFFICIENT_FUNDS:
               console.log('ERROR: INSUFFICIENT FUNDS ');
               singleBlink(PIN_NOT_ENOUGHT_MONEY,5000);
@@ -387,7 +378,7 @@ function initialize() {
       configurator = require("configurator").create();
       configurator.setup(flash);
     }
-    var result = -1;//configurator.loadNetworkConfig();
+    var result = /*-1;/*/configurator.loadNetworkConfig();
     switch (result) {
       case 0:
         logger("Network Config Loaded from Flash");
