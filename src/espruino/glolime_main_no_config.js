@@ -26,8 +26,8 @@ var GPIO4                   = P4;
 var GPIO5                   = P3;
 
 // Network configuration
-var HOST = "192.168.0.100";
-var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.0.201", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "192.168.0.1"};
+var HOST = "192.168.1.100";
+var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.1.201", subnet: "255.255.255.0", gateway: "192.168.1.1", dns: "192.168.1.1"};
 var HOST_PING_TIMEOUT = 25000;
 
 function logger(msg) {
@@ -73,95 +73,6 @@ var golime = 'undefined';
 // Indication module
 var indication = 'undefined';
 
-function processSell(error, data){
-  logger(":: Process SELL PRODUCT");
-  logger("ERROR CODE: " + error);
-}
-
-function processBalance(error, data){
-  logger(":: Process GET BALANCE");
-  logger("ERROR CODE: " + error);
-  if(error === 0) {
-    logger("USER ID: " + data.userId);
-    str_user_id = data.userId;
-    logger("USER TYPE: " + data.userType);
-    logger("BALANCE: " + data.balance);
-    if(!isNaN(data.balance)) {
-        if (data.balance >= 2500) {
-            var balanceToSend = (data.balance).toString(10)+"\n";
-            logger("BALANCE TO STM: " + balanceToSend);
-            //TODO: change to balance ACK
-            Serial4.write(balanceToSend);
-            _internalCommTimeout = setTimeout(function(){
-                logger('ERROR: Balance ACK timeout');
-                _vendBlinkerInterval = indication.stopBlinker(_vendBlinkerInterval);
-                isEnabled = true;
-                isVendDone = true;
-                indication.enableDevice();
-            }, 2000);
-        } else {
-            logger("ATTENTION:: Not enought money");
-            _vendBlinkerInterval = indication.stopBlinker(_vendBlinkerInterval);
-            indication.singleBlink(PIN_NOT_ENOUGHT_MONEY, 5000);
-        }
-    } else {
-        logger("Recieved incorrect data: " + numBalance);
-        _vendBlinkerInterval = indication.stopBlinker(_vendBlinkerInterval);
-        isEnabled = true;
-        isVendDone = true;
-        indication.enableDevice();
-    }
-  } else {
-      _vendBlinkerInterval = indication.stopBlinker(_vendBlinkerInterval);
-      isEnabled = true;
-      isVendDone = true;
-      indication.enableDevice();
-      switch (error){
-          case 241:
-              PIN_ETH_RST.reset();
-              logger("reset ETH_RST pin");
-              /* 
-              setTimeout(function() {
-                logger("set ETH_RST pin");
-                PIN_ETH_RST.set();
-                glolime.getBalance(cardType, cardUID, processBalance);
-              }, 3000);
-              */
-              break;
-          case ERROR_INVALID_CRC:
-              console.log('ERROR: CRC incorrect');
-              isVendDone = true;
-              break;
-          case ERROR_INVALID_COMMAND:
-              console.log('ERROR: Cmd incorrect');
-              break;
-          case ERROR_INVALID_PARAMETER:
-              console.log('ERROR: Cmd parament incorrect');
-              break;
-          case ERROR_INSUFFICIENT_FUNDS:
-              console.log('ERROR: INSUFFICIENT FUNDS ');
-              indication.singleBlink(PIN_NOT_ENOUGHT_MONEY,5000);
-              break;
-          case ERROR_NON_EXISTENT_PRODUCT:
-              console.log('ERROR: PRODUCT DOES NOT EXIST');
-              break;
-          case ERROR_NON_EXISTENT_USER:
-              console.log('ERROR: USER DOES NOT EXIST');
-              break;
-          case ERROR_NON_EXISTENT_SALE:
-              console.log('ERROR: SALE DOES NOT EXIST');
-              break;
-          case ERROR_NOT_REGISTERED_CARD:
-              console.log('ERROR: CARD DOES NOT REGISTERED');
-              indication.singleBlink(PIN_CARD_NOT_REGISTERED, 5000);
-              break;
-          default:
-              console.log('Unknown comand exit code');
-              break;
-      }
-  }
-}
-
 function processTransportLayerCmd(cmd) {
     var array = cmd.split(':');
     var prefix = array[0];
@@ -186,7 +97,7 @@ function processTransportLayerCmd(cmd) {
         var str_product_id = array[1];
         var str_product_price = array[2];
 		logger('VEND INFO | PRODUCT ID: ' + str_product_id + '   PRODUCT PRICE: ' + parseInt(str_product_price, 10)/100);
-        glolime.sellProduct(str_product_id, str_product_price, str_user_id, processSell);
+        glolime.sellProduct(str_product_id, str_product_price, str_user_id);
         break;
       case 'CANCEL':          //CANCEL:\n
         _vendBlinkerInterval = indication.stopBlinker(_vendBlinkerInterval);
@@ -225,7 +136,7 @@ function startRFIDListening() {
               cardUID = data.uid;
               cardType = 0x01;
               logger("CARD UID: " + cardUID);
-              glolime.getBalance(cardType, cardUID, processBalance);
+              glolime.getBalance(cardType, cardUID);
             }
 		}
 		setTimeout(function () {
@@ -312,7 +223,6 @@ Serial6.on('data', function(data) {
   }
 });
 
-
 function initialize() {
   // Indication setup
   indication = require("indication").create();
@@ -330,8 +240,10 @@ function initialize() {
       logger("Network Config Loaded from Flash");
       logger("CODE:" + result);
       logger("HOST: " + configurator.getHost());
+      HOST = configurator.getHost();
       logger("NETWORK CONFIG:");
       logger(configurator.getNetworkConfig());
+      NETWORK_CONFIG = configurator.getNetworkConfig();
       break;
     default:
       logger("ERROR:: Network Config Load: " + result);
@@ -360,6 +272,7 @@ function initialize() {
   logger("... glolime communication ... ");
   glolime = require("CommGlolime").create();
   glolime.setup(client, HOST, crc, p);
+  subscribeGlolimeEvents();
   initNfcModule(nfc);
   setTimeout(function(){
     PIN_MDB_RST.set();
@@ -367,7 +280,95 @@ function initialize() {
   }, 12000);
 }
 
-//E.on('init', function() {
+function subscribeGlolimeEvents() {
+  glolime.on('sell',function(data){
+    logger(":: Process SELL PRODUCT");
+    logger("ERROR CODE: " + data.message);
+  });
+
+  glolime.on('balance',function(data){
+    logger(":: Process GET BALANCE");
+    logger("ERROR CODE: " + data.message);
+    if(data.message === 0) {
+      logger("USER ID: " + data.userId);
+      str_user_id = data.userId;
+      logger("USER TYPE: " + data.userType);
+      logger("BALANCE: " + data.balance);
+      if(!isNaN(data.balance)) {
+          if (data.balance >= 2500) {
+              var balanceToSend = (data.balance).toString(10)+"\n";
+              logger("BALANCE TO STM: " + balanceToSend);
+              //TODO: change to balance ACK
+              Serial4.write(balanceToSend);
+              _internalCommTimeout = setTimeout(function(){
+                  logger('ERROR: Balance ACK timeout');
+                  _vendBlinkerInterval = indication.stopBlinker(_vendBlinkerInterval);
+                  isEnabled = true;
+                  isVendDone = true;
+                  indication.enableDevice();
+              }, 2000);
+          } else {
+              logger("ATTENTION:: Not enought money");
+              _vendBlinkerInterval = indication.stopBlinker(_vendBlinkerInterval);
+              indication.singleBlink(PIN_NOT_ENOUGHT_MONEY, 5000);
+          }
+      } else {
+          logger("Recieved incorrect data: " + numBalance);
+          _vendBlinkerInterval = indication.stopBlinker(_vendBlinkerInterval);
+          isEnabled = true;
+          isVendDone = true;
+          indication.enableDevice();
+      }
+    } else {
+        _vendBlinkerInterval = indication.stopBlinker(_vendBlinkerInterval);
+        isEnabled = true;
+        isVendDone = true;
+        indication.enableDevice();
+    }
+  });
+
+  glolime.on('error', function(data) {
+    switch (data.message){
+      case 241:
+        isVendDone = true;
+        logger("Timeout Error");
+        break;
+      case ERROR_INVALID_CRC:
+        logger('ERROR: CRC incorrect');
+        isVendDone = true;
+        break;
+      case ERROR_INVALID_COMMAND:
+        logger('ERROR: Cmd incorrect');
+        break;
+      case ERROR_INVALID_PARAMETER:
+        logger('ERROR: Cmd parament incorrect');
+        break;
+      case ERROR_INSUFFICIENT_FUNDS:
+        logger('ERROR: INSUFFICIENT FUNDS ');
+        indication.singleBlink(PIN_NOT_ENOUGHT_MONEY,5000);
+        break;
+      case ERROR_NON_EXISTENT_PRODUCT:
+        logger('ERROR: PRODUCT DOES NOT EXIST');
+        break;
+      case ERROR_NON_EXISTENT_USER:
+        logger('ERROR: USER DOES NOT EXIST');
+        break;
+      case ERROR_NON_EXISTENT_SALE:
+        logger('ERROR: SALE DOES NOT EXIST');
+        break;
+      case ERROR_NOT_REGISTERED_CARD:
+        logger('ERROR: CARD DOES NOT REGISTERED');
+        indication.singleBlink(PIN_CARD_NOT_REGISTERED, 5000);
+        break;
+      default:
+        logger('Unknown comand exit code:\n');
+        logger(data.message);
+        break;
+    }
+  });
+}
+
+E.on('init', function() {
   E.enableWatchdog(10, true);
   process.on('uncaughtException', function() {
     logger('Uncaught Exception!!!');
@@ -375,4 +376,4 @@ function initialize() {
     load();
   });
   initialize();
-//});
+});
