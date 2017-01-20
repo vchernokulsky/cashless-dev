@@ -46,16 +46,16 @@ CommGlolime.prototype._getHexStr = function(data) {
     return str;
 };
 
-CommGlolime.prototype.getBalance = function(cardType, strCardUid, callback) {
+CommGlolime.prototype.getBalance = function(cardType, strCardUid) {
   var cardUid  = this._processUidToSend(strCardUid);
   var cmdData = [];
   cmdData = [cardType].concat(cardUid);
   var msg = [];
   msg = this._makeCmdFrame(this._ADDR, this._BALANCE_CMD, cmdData);
-  this._sendMsgFrame(msg, callback);
+  this._sendMsgFrame(msg);
 };
 
-CommGlolime.prototype.sellProduct = function(strId, strPrice, strUserId, callback) {
+CommGlolime.prototype.sellProduct = function(strId, strPrice, strUserId) {
   var productId = this._uintToByteArray(parseInt(strId, 10)+1);
   var productPrice = this._uintToByteArray(parseInt(strPrice, 10));
   var userId = this._uintToByteArray(parseInt(strUserId, 10));
@@ -78,7 +78,7 @@ CommGlolime.prototype.sellProduct = function(strId, strPrice, strUserId, callbac
   cmdData = (userIdToSend.concat(prodIdToSend).concat(prodPriceToSend));
   var msg = [];
   msg = this._makeCmdFrame(this._ADDR, this._SELL_CMD, cmdData);
-  this._sendMsgFrame(msg, callback);
+  this._sendMsgFrame(msg);
 };
 
 CommGlolime.prototype._uintToByteArray = function(/*long*/long) {
@@ -127,13 +127,20 @@ CommGlolime.prototype._processLitleEnd1 = function (array) {
     return 0;
   }
   for(var i=0; i<tmp.length; i++) {
-    str += tmp[i].toString(16);
+    temp = tmp[i].toString(16);
+    if (temp.length < 2) {
+        temp = "0" + temp;
+    }
+    str += temp;
+    console.log("tmp[i] = " + tmp[i]);
+    console.log("tmp[i].toString(16) = " + tmp[i].toString(16));
+    console.log("str = " + str);
   }
   return parseInt(str, 16);
 };
 
 // functions for cmd parser
-CommGlolime.prototype._putByte = function(cmdByte, callback) {
+CommGlolime.prototype._putByte = function(cmdByte) {
 	switch(cmdByte)
 	{
 		case this._PREAMBLE:
@@ -144,7 +151,7 @@ CommGlolime.prototype._putByte = function(cmdByte, callback) {
 			break;
 		case this._POSTAMBLE:
 			this._parser_state = this._END_STATE;
-            this._processResponseFrame(this._buffer, callback);
+            this._processResponseFrame(this._buffer);
 			break;
 		default:
 			this._processByte(cmdByte);
@@ -215,23 +222,24 @@ CommGlolime.prototype._makeCmdFrame = function(_addr, _cmdCode, cmdData){
     return result;
 };
 
-CommGlolime.prototype._sendMsgFrame = function (msg, callback){
+CommGlolime.prototype._sendMsgFrame = function (msg){
     var owner = this;
     var refSocket = 'undefined';
     var timeoutId = setTimeout(function () {
       clearTimeout(timeoutId);
-      this._failuresCount++;
+      owner._failuresCount++;
       console.log('_sendMsgFrame:: Timeout Error');
       try {
         if(refSocket != 'undefined') {
+          console.log("END SOCKET");
           refSocket.end();
         }
       } catch(ex) {
           console.log('Socket interrupt exception: ' + ex);
       }
-      callback(owner._ERROR_TIMEOUT, 'undefined');
+      owner.emit('error',{message: owner._ERROR_TIMEOUT});
      }, 5000);
-    
+    console.log("Connecting...");
     this._client.connect({host: this._HOST, port: 6767},  function(socket) {
         console.log('Client connected');
         console.log('REQUEST :: ' + owner._getHexStr(msg));
@@ -250,7 +258,7 @@ CommGlolime.prototype._sendMsgFrame = function (msg, callback){
               console.log("Exception: " + ex);
             }
 			for(var i = 0; i < data.length; i++) {
-              owner._putByte(data.charCodeAt(i), callback);
+              owner._putByte(data.charCodeAt(i));
 			}
 		});
 		socket.on('close', function() {
@@ -263,7 +271,7 @@ CommGlolime.prototype._sendMsgFrame = function (msg, callback){
     });
 };
 
-CommGlolime.prototype._processResponseFrame = function (resp, callback){
+CommGlolime.prototype._processResponseFrame = function (resp){
 	console.log('RESPONSE:: ' + this._getHexStr(resp));
     if (this._crc.check(resp)) {
 		var exitCode = resp[3];
@@ -276,66 +284,24 @@ CommGlolime.prototype._processResponseFrame = function (resp, callback){
               var userId = this._processLitleEnd(resp.slice(4,8));
               var userType = resp.slice(8,9);
               var balance = this._processLitleEnd1(resp.slice(9,13));
-              var data = {"userId":userId, "userType":userType, "balance":balance};
+              var data = {message: exitCode,"userId":userId, "userType":userType, "balance":balance};
               this._buffer = [];
-              callback(exitCode, data);
+              this.emit('balance',data);
               break;
             case 2:
               this._buffer = [];
-              callback(exitCode, {});
+              this.emit('sell',{message: "Sell done"});
               break;
             default:
               this._buffer = [];
-              callback(exitCode, {});
+              var smsg = "Unknowm glolime response exit code: \n" + cmdCode;
+              this.emit('error',{message: smsg});
               break;
           }
         }
         else {
           this._buffer = [];
-          callback(exitCode, {});
-          /*
-          switch (exitCode){
-              case ERROR_INVALID_CRC:
-                console.log('ERROR: CRC incorrect');
-                isVendDone = true;
-              break;
-              case ERROR_INVALID_COMMAND:
-                  console.log('ERROR: Cmd incorrect');
-              break;
-              case ERROR_INVALID_PARAMETER:
-                  console.log('ERROR: Cmd parament incorrect');
-              break;
-              case ERROR_INVALID_CRC:
-                  console.log('ERROR: CRC INCORRECT');
-              break;
-              case ERROR_INVALID_COMMAND:
-                  console.log('ERROR: CMD INCORRECT');
-              break;
-              case ERROR_INVALID_PARAMETER:
-                  console.log('ERROR: CMD PARAMENT INCORRECT');
-              break;
-              case ERROR_INSUFFICIENT_FUNDS:
-                  console.log('ERROR: INSUFFICIENT FUNDS ');
-                  singleBlink(PIN_NOT_ENOUGHT_MONEY, 5000);
-              break;
-              case ERROR_NON_EXISTENT_PRODUCT:
-                  console.log('ERROR: PRODUCT DOES NOT EXIST');
-              break;
-              case ERROR_NON_EXISTENT_USER:
-                  console.log('ERROR: USER DOES NOT EXIST');
-              break;
-              case ERROR_NON_EXISTENT_SALE:
-                  console.log('ERROR: SALE DOES NOT EXIST');
-              break;
-              case ERROR_NOT_REGISTERED_CARD:
-                  console.log('ERROR: CARD DOES NOT REGISTERED');
-                  singleBlink(PIN_CARD_NOT_REGISTERED, 5000);
-              break;
-              default:
-                  console.log('Unknown comand exit code');
-              break;
-          }
-          */
+          this.emit('error',{message: exitCode});
         }
 	}
 };
