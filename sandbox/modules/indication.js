@@ -69,16 +69,18 @@ indication.prototype.stopCarousel = function() {
 
 indication.prototype.singleBlink = function(led, timeout){
     this._switchLed(led, true);
+    var owner = this;
     setTimeout(function(){
-         this._switchLed(led, false);
+         owner._switchLed(led, false);
     }, timeout);
 };
 
 indication.prototype.startBlinker = function(led, period) {
     var blinkFlag = false;
+    var owner = this;
     var intervalId = setInterval(function(){
          blinkFlag = !blinkFlag;
-         this._switchLed(led, blinkFlag);
+         owner._switchLed(led, blinkFlag);
     }, period, blinkFlag);
     return intervalId;
 };
