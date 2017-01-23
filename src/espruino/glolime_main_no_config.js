@@ -22,8 +22,8 @@ var PIN_ETH_CS   = B12;
 var PIN_WIFI_RST = A4;
 
 // Indication funds by LEDs
-var PIN_NOT_ENOUGHT_MONEY   = P7;
-var PIN_CARD_NOT_REGISTERED = P6;
+var PIN_CARD_NOT_REGISTERED = P7;
+var PIN_NOT_ENOUGHT_MONEY   = P6;
 var PIN_DEV_READY           = P5;
 var GPIO4                   = P4;
 var GPIO5                   = P3;
