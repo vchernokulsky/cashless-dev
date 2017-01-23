@@ -7,24 +7,29 @@
 
 #include "MDBConst.h"
 #include "mdb_helper.h"
+#include "internal_usart_comm.h"
 
-
+#include "cashless_protocol.h"
 
 
 void main(void)
 {
-	char mdb_cmd[36];
+	unsigned char mdb_cmd[36];
 	unsigned short bytes_count = 0;
 	unsigned short lenght = 0;
 	unsigned char  isReadData = 0;
 	// variables for reading from UART
 	unsigned short tbyte = 0x0000;
 	unsigned char  byte  = 0x00;
-	initialize_board();
 
-	// initialize cashless
+	//unsigned short i = 0;
+
+	initialize_board();
 	CashlessProtocoInit(USART1_Send);
 
+	send_startup();
+
+	// main loop for MDB commands processing
 	while(1)
 	{
 		tbyte = USART1_Recv();

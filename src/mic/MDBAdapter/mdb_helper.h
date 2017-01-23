@@ -21,4 +21,4 @@ int read_balance();
 void CashlessProtocoInit(void (*writestream)(uint16_t Data ));
 
 // espruino communication layer
-void send_to_espruino(const char *cmd, unsigned int length);
+//void send_to_espruino(const char *cmd, unsigned int length);

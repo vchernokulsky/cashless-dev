@@ -121,7 +121,7 @@ PN532.prototype._getHexStr = function (data) {
     str += ('0x' + data[i].toString(16) + ' ');
   }
   return str;
-}
+};
 
 PN532.prototype.authBlock = function(uid, blockNumber, keyNumber, keyData, callback) {
   // Prepare the authentication command //
@@ -140,7 +140,7 @@ PN532.prototype.authBlock = function(uid, blockNumber, keyNumber, keyData, callb
   
   this._sendCommandCheckAck(this._classicPacketBuffer, 10+uid.length);
   this._imWaitingFor.push(this._readAuthAck.bind(this, callback));  
-}
+};
 
 PN532.prototype._readAuthAck = function(callback) {
   var error = true;
@@ -156,7 +156,7 @@ PN532.prototype._readAuthAck = function(callback) {
     return;
   }
   callback(!error, buffer);
-}
+};
 
 PN532.prototype.readBlock = function(blockNumber, callback) {
   /* Prepare the command  */

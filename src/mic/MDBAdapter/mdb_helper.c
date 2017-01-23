@@ -25,6 +25,7 @@ unsigned short SUB_SETUP[2] =     {6, 6};
 unsigned short SUB_VEND[6] =      {6, 2, 4, 2, 2, 6};
 unsigned short SUB_EXPANSION[1] = {31};
 unsigned short SUB_READER[3] =    {2, 2, 2};
+unsigned short SUB_REVALUE[2] = {4, 2};
 
 //variables for construct mdb command
 int  cmdId;
@@ -102,6 +103,17 @@ unsigned short check_for_mdb_command(char input) {
 				}
 			}
 			break;
+		case REVALUE:
+			if(buffer_length == 2)
+				subCmdId = input;
+			// Command length must equal: LEN(CMD) + LEN(CHK)
+			if(buffer_length > 1) {
+				if(buffer_length > SUB_REVALUE[subCmdId]) {
+					result = buffer_length;
+					buffer_length = 0;
+				}
+			}
+			break;
 	}
 	if(buffer_length > MAX_MSG_LENGTH) {
 		result = buffer_length;
@@ -129,7 +141,7 @@ void send_mdb_command(struct Response *data) {
 #endif
 }
 
-void fill_mbd_command(struct Response *resp, const char* buffer, int length) {
+void fill_mdb_command(struct Response *resp, const char* buffer, int length) {
 	resp->length = length;
 	memcpy(resp->buffer, buffer, length);
 }
@@ -150,16 +162,16 @@ int read_balance() {
 }
 
 // this fuction for send text command to espruino board
-void send_to_espruino(const char *cmd, unsigned int length) {
-#if defined(__PLATFORM_PC__)
-	unsigned int i = 0;
-	for(i=0; i<length; i++) {
-		unsigned int val = (unsigned int)cmd[i];
-		printf("0x%02x", val);
-		printf(" ");
-	}
-	printf("\n");
-#elif defined(__PLATFORM_STM32__)
-	USART2_Send_String(cmd);
-#endif
-}
+//void send_to_espruino(const char *cmd, unsigned int length) {
+//#if defined(__PLATFORM_PC__)
+//	unsigned int i = 0;
+//	for(i=0; i<length; i++) {
+//		unsigned int val = (unsigned int)cmd[i];
+//		printf("0x%02x", val);
+//		printf(" ");
+//	}
+//	printf("\n");
+//#elif defined(__PLATFORM_STM32__)
+//	USART2_Send_String(cmd);
+//#endif
+//}

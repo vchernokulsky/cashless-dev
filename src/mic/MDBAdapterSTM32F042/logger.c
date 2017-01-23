@@ -17,7 +17,7 @@ void log(const char *msg) {
 #if defined(__PLATFORM_PC__)
 	printf("%s", msg);
 #elif defined(__PLATFORM_STM32__)
-	USART2_Send_String(msg);
+	//USART2_Send_String(msg);
 #endif
 }
 
@@ -32,9 +32,9 @@ void log_recv_amount(unsigned short amount) {
 }
 
 void log_mdb_command(unsigned short stateId, unsigned short cmdId, unsigned short subCmdId) {
-	unsigned char tmp_state_str[16];
-	unsigned char tmp_str[64];
-	unsigned char tmp_num_str[8] = {0,0,0,0,0,0,0,0};
+	//unsigned char tmp_state_str[16];
+	char tmp_str[64];
+	char tmp_num_str[8] = {0,0,0,0,0,0,0,0};
 	memset(tmp_str, 0x00, 64);
 	// detected dev state
 	switch(stateId) {

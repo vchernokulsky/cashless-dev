@@ -7,6 +7,8 @@
 
 #include "MDBConst.h"
 #include "mdb_helper.h"
+#include "internal_usart_comm.h"
+
 #include "cashless_protocol.h"
 
 
@@ -15,30 +17,17 @@ void main(void)
 	unsigned char mdb_cmd[36];
 	unsigned short bytes_count = 0;
 	unsigned short lenght = 0;
-	int isReady = 0;
 	unsigned char  isReadData = 0;
 	// variables for reading from UART
 	unsigned short tbyte = 0x0000;
 	unsigned char  byte  = 0x00;
 
+	//unsigned short i = 0;
+
 	initialize_board();
 	CashlessProtocoInit(USART1_Send);
 
-	// notify espruino board about start
-	delay_ms(5000);
-	send_to_espruino("MDB BOARD STARTED\n\0", 15);
-
-	//waiting for espruino initialization
-//	for(;;) {
-//		isReady = get_espruino_started();
-//		if(isReady)
-//			break;
-//		delay_ms(1000);
-//	}
-
-	//espruino initialization confirm
-//	delay_ms(250);
-//	send_to_espruino("INIT CONFIRM\n\0", 14);
+	send_startup();
 
 	// main loop for MDB commands processing
 	while(1)
