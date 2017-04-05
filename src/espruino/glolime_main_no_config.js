@@ -22,8 +22,8 @@ var PIN_ETH_CS   = B12;
 var PIN_WIFI_RST = A4;
 
 // Indication funds by LEDs
-var PIN_NOT_ENOUGHT_MONEY   = P7;
-var PIN_CARD_NOT_REGISTERED = P6;
+var PIN_CARD_NOT_REGISTERED = P7;
+var PIN_NOT_ENOUGHT_MONEY   = P6;
 var PIN_DEV_READY           = P5;
 var GPIO4                   = P4;
 var GPIO5                   = P3;
@@ -492,17 +492,22 @@ function processLitleEnd(array) {
 }
 
 function processLitleEnd1(array) {
-  var str = "";
-  var tmp = array.reverse();
-  var mask = 0x80;
-  var check = tmp[0] & mask;
-  if (check !== 0x00){
-    return 0;
-  }
-  for(var i=0; i<tmp.length; i++) {
-    str += tmp[i].toString(16);
-  }
-  return parseInt(str, 16);
+    var str = "";
+    var tmp = array.reverse();
+    var mask = 0x80;
+    var check = tmp[0] & mask;
+    if (check !== 0x00){
+        return 0;
+    }
+    var temp = "";
+    for(var i=0; i<tmp.length; i++) {
+        temp = tmp[i].toString(16);
+        if (temp.length < 2) {
+            temp = "0" + temp;
+        }
+        str += temp;
+    }
+    return parseInt(str, 16);
 }
 
 function makeCmdDataToGetBalance(cardType, cardUid){

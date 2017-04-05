@@ -22,15 +22,15 @@ var PIN_ETH_CS   = B12;
 var PIN_WIFI_RST = A4;
 
 // Indication funds by LEDs
-var PIN_NOT_ENOUGHT_MONEY   = P6; //Ж
-var PIN_CARD_NOT_REGISTERED = P7; //К
-var PIN_DEV_READY           = P5; //З
+var PIN_CARD_NOT_REGISTERED = P7;
+var PIN_NOT_ENOUGHT_MONEY   = P6;
+var PIN_DEV_READY           = P5;
 var GPIO4                   = P4;
 var GPIO5                   = P3;
 
 // Network configuration
-var HOST = "192.168.0.5";
-var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.0.205", subnet: "255.255.255.0", gateway: "192.168.0.1", dns: "192.168.0.1"};
+var HOST = "192.168.1.101";
+var NETWORK_CONFIG = {mac: "56:44:58:0:0:05", ip: "192.168.1.201", subnet: "255.255.255.0", gateway: "192.168.1.1", dns: "192.168.1.1"};
 //var NETWORK_CONFIG = {mac: "56:44:58:0:0:06"};
 var HOST_PING_TIMEOUT = 25000;
 
@@ -136,14 +136,14 @@ function switchLed(led, state) {
 }
 
 function blinkCarousel() {
-  P7.reset();
-  P6.set();
+  PIN_CARD_NOT_REGISTERED.reset();
+  PIN_DEV_READY.set();
   _carouselTimeout = setTimeout(function() {
-    P6.reset();
-    P5.set();
+    PIN_DEV_READY.reset();
+    PIN_NOT_ENOUGHT_MONEY.set();
     _carouselTimeout = setTimeout(function() {
-      P5.reset();
-      P7.set();
+      PIN_NOT_ENOUGHT_MONEY.reset();
+      PIN_CARD_NOT_REGISTERED.set();
       _carouselTimeout = setTimeout(blinkCarousel, 250);
     }, 250);
   }, 250);
@@ -426,9 +426,10 @@ function processGloLimeResponse(resp){
               break;
             case 2:
               // Buy command
+              enableDevice();
               break;
             default:
-
+              enableDevice();
               break;
           }
         }
@@ -481,20 +482,6 @@ function processGloLimeResponse(resp){
 }
 
 // return HEX value
-function processLitleEnd1(array) {
-  var str = "";
-  var tmp = array.reverse();
-  var mask = 0x80;
-  var check = tmp[0] & mask;
-  if (check !== 0x00){
-    return 0;
-  }
-  for(var i=0; i<tmp.length; i++) {
-    str += tmp[i].toString(16);
-  }
-  return parseInt(str, 16);
-}
-
 function processLitleEnd(array) {
   var str = "";
   var tmp = array.reverse();
@@ -502,6 +489,25 @@ function processLitleEnd(array) {
     str += tmp[i].toString(16);
   }
   return parseInt(str, 16);
+}
+
+function processLitleEnd1(array) {
+    var str = "";
+    var tmp = array.reverse();
+    var mask = 0x80;
+    var check = tmp[0] & mask;
+    if (check !== 0x00){
+        return 0;
+    }
+    var temp = "";
+    for(var i=0; i<tmp.length; i++) {
+        temp = tmp[i].toString(16);
+        if (temp.length < 2) {
+            temp = "0" + temp;
+        }
+        str += temp;
+    }
+    return parseInt(str, 16);
 }
 
 function makeCmdDataToGetBalance(cardType, cardUid){
@@ -654,54 +660,28 @@ function initNfcModule(nfc) {
     }, 5000);
 }
 
-function initialize() {
-    console.log("... peripherial initialising ... ");
-    PIN_MDB_RST.reset();
-	PIN_DEV_READY.reset();
-    logger("MDB RESET");
-    // setup serial for MDB transport communication
-    Serial4.setup(115200);
-    // setup RFID module
-	I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
-    nfc = require("nfc").connect({i2c: I2C1, irqPin: PIN_RFID_IRQ});
-    // setup ethernet module
-    logger("Setup ethernet module");
-    PIN_ETH_RST.set();
-    PIN_ETH_IRQ.set();
-    SPI2.setup({mosi:B15, miso:B14, sck:B13});
-    eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
-    eth.setIP(NETWORK_CONFIG);
-	logger(eth.getIP());
-	crc = require("CRC16").create();
-    client = require("net");
-    initNfcModule(nfc);
-    setTimeout(function(){
-      PIN_MDB_RST.set();
-      logger('MDB SET');
-	}, 12000);
-}
-
-
 function loadNetworkConfig(){
   var flash = require('Flash');
   var data, settings;
   var addr_free_mem = flash.getFree();
   addr = addr_free_mem[0].addr;
-  var data_1 = flash.read(180, addr);
+  var data_1 = flash.read(192, addr);
   data = ab2str(data_1);
-  console.log(data);
   settings = JSON.parse(data);
+  logger("Config from flash:\n");
+  logger(data);
+  logger("::\n");
+  logger(settings);
   if (settings){
     HOST = settings.host;
-    NETWORK_CONFIG.ip = settings.config.ip;
-    NETWORK_CONFIG.mac = settings.config.mac;
-    NETWORK_CONFIG.subnet = settings.config.subnet;
-    NETWORK_CONFIG.gateway = settings.config.gateway;
-    NETWORK_CONFIG.dns = settings.config.dns;
+    NETWORK_CONFIG.ip = settings.netconfig.ip;
+    NETWORK_CONFIG.mac = settings.netconfig.mac;
+    NETWORK_CONFIG.subnet = settings.netconfig.subnet;
+    NETWORK_CONFIG.gateway = settings.netconfig.gateway;
+    NETWORK_CONFIG.dns = settings.netconfig.dns;
     console.log("HOST = " + HOST + "  NETWORK_CONFIG = " + NETWORK_CONFIG);
   } else {
     console.log("Read config info from Flash ERROR");
-    console.log(data);
   }
 }
 
@@ -726,7 +706,7 @@ function str2ab(str) {
 var toWriteInFlash = new Uint8Array(0);
 var cmdSerial6 = "";
 var bufferSerial6 = "";
-Serial6.setup(9600);
+
 Serial6.on('data', function(data) {
   failureDevice();
   bufferSerial6 += data;
@@ -735,6 +715,8 @@ Serial6.on('data', function(data) {
     cmdSerial6 = bufferSerial6.slice(0, idx);
     bufferSerial6 = bufferSerial6.slice(idx, bufferSerial6.length-1);
     cmdSerial6 = cmdSerial6.trim();
+    logger("Serial6 data: \n");
+    logger(bufferSerial6);
     processSerial6Data();
   }
 });
@@ -743,7 +725,9 @@ function processSerial6Data(){
 	var result = JSON.parse(cmdSerial6);
     console.log(" ===> Result from UART: ");
     console.log(result);
-    writeInFlash();
+    if (result != 'undefined'){
+      writeInFlash();
+    }
 }
 
 function writeInFlash(){
@@ -761,16 +745,53 @@ function writeInFlash(){
 	var addr_free_mem = flash.getFree();
 	var addr = addr_free_mem[0].addr;
 	console.log(" Writing ... ");
-    Serial6.write("Writing...\n");
 	flash.erasePage(addr);
 	flash.write(buf, addr);
-	console.log("Writing done! ");
-    Serial6.write("Writing done!\n");
+	console.log(" Writing done! ");
     bufferSerial6 = "";
-	reset();
-    load();
-    enableDevice();
+    cmdSerial6 = "";
+    Serial6.write("\nWriting done!");
+    setTimeout(function(){
+      reset();
+      load();
+      enableDevice();
+    }, 2000);
 }
+
+function initialize() {
+    console.log("... peripherial initialising ... ");
+    PIN_MDB_RST.reset();
+	PIN_DEV_READY.reset();
+    logger("MDB RESET");
+    // setup serial for MDB transport communication
+    Serial4.setup(115200);
+    // setup RFID module
+	I2C1.setup({sda: SDA, scl: SCL, bitrate: 400000});
+    nfc = require("nfc").connect({i2c: I2C1, irqPin: PIN_RFID_IRQ});
+    // setup ethernet module
+    logger("Setup ethernet module");
+    PIN_ETH_RST.set();
+    PIN_ETH_IRQ.set();
+    SPI2.setup({mosi:B15, miso:B14, sck:B13});
+    eth = require("WIZnet").connect(SPI2, PIN_ETH_CS);
+    eth.setIP(NETWORK_CONFIG);
+	logger(eth.getIP());
+
+    var sNetConf = "";
+    var cfg = eth.getIP();
+    sNetConf = "\nMAC: " + cfg.mac + "\nIP: " + cfg.ip + "\nMASK: " + cfg.subnet + "\nTOUCHBOX: " + HOST;
+    Serial6.setup(9600);
+    Serial6.write(sNetConf);
+
+	crc = require("CRC16").create();
+    client = require("net");
+    initNfcModule(nfc);
+    setTimeout(function(){
+      PIN_MDB_RST.set();
+      logger('MDB SET');
+	}, 12000);
+}
+
 
 E.on('init', function() {
   E.enableWatchdog(10, true);
